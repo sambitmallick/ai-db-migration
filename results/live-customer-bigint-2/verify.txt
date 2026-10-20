@@ -1,0 +1,5 @@
+PASS  orders.customer_id is bigint NOT NULL  
+PASS  all 10,000,000 original orders still exist  0 missing
+PASS  original orders: amount, customer and email unchanged  0 changed
+PASS  every order placed during the migration is there, unchanged  0 of 4735 missing or changed
+app: DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null

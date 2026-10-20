@@ -1,0 +1,122 @@
+[
+ {
+  "note": "Expand: add nullable total (metadata only, no rewrite) and drop NOT NULL from amount so the app can later stop writing it. Short lock_timeout with retries so a waiting ACCESS EXCLUSIVE lock never queues app queries for long. Fails here, before any deploy, if total already exists.",
+  "kind": "sql",
+  "start": 1792493895.6455224,
+  "end": 1792493895.8850977,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "App writes both amount and total, still reads amount.",
+  "kind": "deploy",
+  "start": 1792493895.8850977,
+  "end": 1792493899.3399215,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish in-flight requests (3 s drain + 2 s statement timeout), so every new row now gets total.",
+  "kind": "wait",
+  "start": 1792493899.3399215,
+  "end": 1792493909.3402321,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill total = amount, ids 1..2,500,000, in 100k-row primary-key ranges, each its own short transaction. The app never updates old rows, so no lock conflicts.",
+  "kind": "sql",
+  "start": 1792493909.3402321,
+  "end": 1792493918.6315215,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,500,001..5,000,000.",
+  "kind": "sql",
+  "start": 1792493918.6315215,
+  "end": 1792493928.246842,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5,000,001..7,500,000.",
+  "kind": "sql",
+  "start": 1792493928.246842,
+  "end": 1792493939.6746747,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7,500,001..10,000,000, then every row inserted after the seed (old pods during the first rollout wrote amount only).",
+  "kind": "sql",
+  "start": 1792493939.6746747,
+  "end": 1792493949.4910133,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Make total NOT NULL without a long blocking scan: add a NOT VALID check (brief lock, retried), then validate it under SHARE UPDATE EXCLUSIVE, which does not block the app's reads or inserts. Validation fails, stopping the plan, if any row was missed.",
+  "kind": "sql",
+  "start": 1792493949.4910133,
+  "end": 1792493990.8530838,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL uses the validated check instead of scanning (PG 12+), then the helper check is dropped. Brief lock, retried.",
+  "kind": "sql",
+  "start": 1792493990.8530838,
+  "end": 1792493991.1137066,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "App reads total, still writes both, so old pods still reading amount during the rollout see correct values for new rows.",
+  "kind": "deploy",
+  "start": 1792493991.1137066,
+  "end": 1792493994.4666107,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Drain old pods.",
+  "kind": "wait",
+  "start": 1792493994.4666107,
+  "end": 1792494004.4676118,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "App reads and writes total only (amount is nullable now, so inserts without it succeed).",
+  "kind": "deploy",
+  "start": 1792494004.4676118,
+  "end": 1792494007.6738048,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Drain old pods so nothing references amount any more.",
+  "kind": "wait",
+  "start": 1792494007.6738048,
+  "end": 1792494017.6776204,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Contract: drop amount (metadata only). Brief lock, retried.",
+  "kind": "sql",
+  "start": 1792494017.6776204,
+  "end": 1792494017.9171548,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Reclaim the dead tuples left by the backfill and refresh stats (plain VACUUM, does not block the app). The migration is already complete before this step.",
+  "kind": "sql",
+  "start": 1792494017.9171548,
+  "end": 1792494026.4533832,
+  "ok": true,
+  "output": ""
+ }
+]

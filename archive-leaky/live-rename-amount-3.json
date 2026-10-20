@@ -1,0 +1,14 @@
+{"task": "rename-amount", "steps": [
+  {"note": "In one transaction (metadata only, no rewrite): rename the table to orders_t, rename its column amount to total, and put an auto-updatable view named orders in front of it that exposes the column under both names (amount and total). Old pods keep reading/writing amount, new pods can use total, both hit the same column. The ACCESS EXCLUSIVE lock is taken with a 200ms lock_timeout and retried, so app queries are never queued behind it for long. Fails (and changes nothing) if orders.amount does not exist.",
+   "sql": "SET statement_timeout = '120s'; DO $$ DECLARE tries int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOOP BEGIN ALTER TABLE orders RENAME TO orders_t; ALTER TABLE orders_t RENAME COLUMN amount TO total; CREATE VIEW orders AS SELECT id, customer_id, total AS amount, total, status, email, created_at FROM orders_t; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"},
+  {"note": "Sanity check: both names resolve through the view.",
+   "sql": "SELECT id, amount, total FROM orders ORDER BY id DESC LIMIT 1;"},
+  {"note": "Roll the app over to read and write total (guest email unchanged). During the rollout old pods use amount, new pods use total; never both in one INSERT.",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total", "GUEST_EMAIL": "null"}},
+  {"note": "Let terminating old pods finish (3 s drain + up to 2 s in-flight queries) before the amount alias goes away.",
+   "wait": 15},
+  {"note": "In one transaction: drop the view and rename the table back to orders. The table now has total numeric(10,2) NOT NULL and no amount column; index, sequence and stats are unchanged. Same short lock_timeout + retry.",
+   "sql": "SET statement_timeout = '120s'; DO $$ DECLARE tries int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOOP BEGIN DROP VIEW orders; ALTER TABLE orders_t RENAME TO orders; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"},
+  {"note": "Verify the final shape: orders is a table, total is numeric(10,2) NOT NULL, amount is gone.",
+   "sql": "DO $$ BEGIN IF (SELECT relkind FROM pg_class WHERE oid = 'public.orders'::regclass) <> 'r' THEN RAISE EXCEPTION 'orders is not a table'; END IF; IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'total' AND attnotnull AND NOT attisdropped AND format_type(atttypid, atttypmod) = 'numeric(10,2)') THEN RAISE EXCEPTION 'orders.total missing or wrong'; END IF; IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'amount' AND NOT attisdropped) THEN RAISE EXCEPTION 'orders.amount still exists'; END IF; END $$;"}
+]}

@@ -1,0 +1,42 @@
+{
+ "run": "plain-add-index-1",
+ "task": "add-index",
+ "mode": "plain",
+ "prompt": "/migrate add-index plans/plain-add-index-1.json",
+ "seconds": 44,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 2,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT indexrelid::regclass, indisvalid, pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid='orders'::regclass; SELECT count(*) FROM pg_stat_activity; SELECT version();\\\"; ls plans"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT * FROM pg_db_role_setting; SELECT name, setting FROM pg_settings WHERE name IN ('statement_timeout','lock_timeout','maintenance_work_mem','max_parallel_maintenance_workers');\\\"; l"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-add-index-1.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Build the index without blocking writes: CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so the app's inser"
+  },
+  {
+   "tool": "Edit",
+   "input": "{\"replace_all\": false, \"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-add-index-1.json\", \"old_string\": \"so the app's inserts and reads keep running. Alone in its step because it cannot run inside a transaction block. No timeout: on 10M rows it may "
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I've written the plan to `plans/plain-add-index-1.json`. It has two steps and doesn't need a deploy, because the app's query doesn't change:\n\n1. **Build the index:** `CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id)`. Building it concurrently means the app can keep inserting and reading orders across all 3 replicas while it builds on the 10M-row table. This statement is alone in its step because Postgres won't run a concurrent build inside a transaction.\n2. **Check the index is usable:** this step stops the plan with an error if the index is missing or marked invalid. A concurrent build that fails partway leaves an invalid index behind, and `IF NOT EXISTS` would otherwise skip over it without saying anything.\n\nWith the index, `GET /customer/ID` looks up that customer's roughly 200 orders instead of scanning the whole table.\n\nThe live database already has a valid `orders_customer_id_idx`, probably left over from an earlier run, since `db/seed.sql` doesn't create it. If the plan runs against the database as it is now, step 1 does nothing and step 2 passes. Against a fresh seed, it builds the index."
+}

@@ -1,0 +1,40 @@
+{
+ "task": "customer-fk",
+ "label": "control-customer-fk-naive",
+ "plan": "controls/customer-fk/naive.json",
+ "steps": 1,
+ "steps_run": 1,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 3.2,
+ "baseline": {
+  "requests": 1251,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 13,
+  "max_ms": 109
+ },
+ "during": {
+  "requests": 197,
+  "failed": 23,
+  "failed_writes": 23,
+  "p50_ms": 856,
+  "p99_ms": 2180,
+  "max_ms": 2222
+ },
+ "after": {
+  "requests": 1843,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 17,
+  "max_ms": 73
+ },
+ "max_sessions_waiting_on_lock": 24,
+ "longest_lock_wait_s": 1.99,
+ "checks_passed": 4,
+ "checks": 4,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

@@ -1,0 +1,1 @@
+SQUAWK lock risk: adding-not-nullable-field | may break app: none | hygiene: 3

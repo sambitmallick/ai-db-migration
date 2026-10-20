@@ -1,0 +1,10 @@
+[
+ {
+  "note": "NO-OP. orders.status is NOT unused: app/server.js inserts status='new' on every POST /order (and the column is NOT NULL with no default) and selects status on every GET /order/ID. No env var (AMOUNT_READ/AMOUNT_WRITE/GUEST_EMAIL) turns that off, so dropping the column would make every order insert and order read fail on all three replicas. The drop must wait for an app release that no longer references status; after that it is a single metadata-only statement: SET lock_timeout = '2s'; ALTER TABLE orders DROP COLUMN status;",
+  "kind": "sql",
+  "start": 1792507306.6454427,
+  "end": 1792507306.906845,
+  "ok": true,
+  "output": "1"
+ }
+]

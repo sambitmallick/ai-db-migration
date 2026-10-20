@@ -1,0 +1,10 @@
+{
+ "task": "add-index",
+ "by": "control (naive)",
+ "steps": [
+  {
+   "note": "CREATE INDEX (blocks writes while it builds)",
+   "sql": "CREATE INDEX orders_customer_id_idx ON orders (customer_id);"
+  }
+ ]
+}

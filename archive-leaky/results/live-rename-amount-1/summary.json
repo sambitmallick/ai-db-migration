@@ -1,0 +1,46 @@
+{
+ "task": "rename-amount",
+ "label": "live-rename-amount-1",
+ "plan": "plans/live-rename-amount-1.json",
+ "steps": 20,
+ "steps_run": 20,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 150.9,
+ "baseline": {
+  "requests": 1380,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 13,
+  "max_ms": 80
+ },
+ "during": {
+  "requests": 9282,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 34,
+  "max_ms": 236
+ },
+ "after": {
+  "requests": 1831,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 9,
+  "max_ms": 41
+ },
+ "max_sessions_waiting_on_lock": 1,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.0,
+  "during_rps": 61.5,
+  "after_rps": 61.0
+ },
+ "traffic_ok": true,
+ "checks_passed": 7,
+ "checks": 7,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=total AMOUNT_WRITE=total GUEST_EMAIL=null"
+}

@@ -1,0 +1,6 @@
+{"task": "add-index", "steps": [
+  {"note": "Build the index without blocking writes. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so inserts and reads keep running (a plain CREATE INDEX would block inserts for the whole build and they would hit the app's 2 s timeout). It must be the only statement here: CONCURRENTLY cannot run inside a transaction block.",
+   "sql": "CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id);"},
+  {"note": "Check that the build finished and the index is valid and usable. If not, stop the plan here (a failed concurrent build leaves an INVALID index that has to be dropped with DROP INDEX CONCURRENTLY before trying again).",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = 'orders_customer_id_idx' AND i.indrelid = 'public.orders'::regclass AND i.indisvalid AND i.indisready) THEN RAISE EXCEPTION 'orders_customer_id_idx is missing or invalid'; END IF; END $$;"}
+]}

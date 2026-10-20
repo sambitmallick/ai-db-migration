@@ -1,0 +1,49 @@
+{"task": "rename-amount", "steps": [
+  {"note": "Create the trigger function that keeps amount and total identical: on INSERT it fills whichever of the two the app did not write; on UPDATE it copies whichever side changed to the other. No table lock needed.",
+   "sql": "CREATE OR REPLACE FUNCTION orders_sync_amount_total() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF TG_OP = 'INSERT' THEN IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; ELSE IF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; END IF; END IF; RETURN NEW; END $f$;"},
+
+  {"note": "Expand: add nullable column total (metadata-only, no rewrite) and the sync trigger in one transaction. The lock is taken with a 500 ms lock_timeout and retried, so app queries never queue behind it for long (app statement timeout is 2 s).",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '500ms', true); FOR i IN 1..60 LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ADD COLUMN total numeric(10,2); CREATE TRIGGER orders_sync_amount_total BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_amount_total(); RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+
+  {"note": "Backfill ids [1, 2M) in batches of 20k, committing each batch (short row locks, the app never updates orders anyway).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 1; BEGIN WHILE s < 2000000 LOOP UPDATE orders SET total = amount WHERE id >= s AND id < LEAST(s + 20000, 2000000) AND total IS NULL; COMMIT; s := s + 20000; END LOOP; END $$;"},
+  {"note": "Vacuum so the dead row versions from the backfill are reused instead of growing the table.",
+   "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill ids [2M, 4M).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 2000000; BEGIN WHILE s < 4000000 LOOP UPDATE orders SET total = amount WHERE id >= s AND id < LEAST(s + 20000, 4000000) AND total IS NULL; COMMIT; s := s + 20000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill ids [4M, 6M).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 4000000; BEGIN WHILE s < 6000000 LOOP UPDATE orders SET total = amount WHERE id >= s AND id < LEAST(s + 20000, 6000000) AND total IS NULL; COMMIT; s := s + 20000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill ids [6M, 8M).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 6000000; BEGIN WHILE s < 8000000 LOOP UPDATE orders SET total = amount WHERE id >= s AND id < LEAST(s + 20000, 8000000) AND total IS NULL; COMMIT; s := s + 20000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill ids [8M, max(id)]: everything up to the current max, which covers any row inserted before the trigger existed (later rows are filled by the trigger).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 8000000; m bigint; BEGIN SELECT max(id) INTO m FROM orders; WHILE s <= m LOOP UPDATE orders SET total = amount WHERE id >= s AND id < s + 20000 AND total IS NULL; COMMIT; s := s + 20000; END LOOP; END $$;"},
+  {"note": "Vacuum and refresh statistics.", "sql": "SET statement_timeout = 0; VACUUM ANALYZE orders;"},
+
+  {"note": "Check: every row has total equal to amount. Fails the plan (before any app change) if not.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM orders WHERE total IS DISTINCT FROM amount; IF n > 0 THEN RAISE EXCEPTION '% rows where total <> amount', n; END IF; END $$;"},
+
+  {"note": "NOT NULL on total without a long lock, step 1: add CHECK (total IS NOT NULL) NOT VALID (brief lock, retried).",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '500ms', true); FOR i IN 1..60 LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+  {"note": "Step 2: validate the check. Takes only SHARE UPDATE EXCLUSIVE, so reads and inserts continue during the scan.",
+   "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;"},
+  {"note": "Step 3: SET NOT NULL uses the validated check and skips the table scan, so the lock is momentary; then drop the now-redundant check.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '500ms', true); FOR i IN 1..60 LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_total_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+
+  {"note": "Switch the app to total. During the rolling update old pods read/write amount and new pods read/write total; the trigger keeps both columns filled and equal for every insert.",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total"}},
+  {"note": "Let old pods that are still terminating finish their in-flight requests (they stop ~3-5 s after SIGTERM; grace period is 30 s).",
+   "wait": 35},
+
+  {"note": "Re-check consistency before dropping the old column.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM orders WHERE total IS DISTINCT FROM amount OR total IS NULL; IF n > 0 THEN RAISE EXCEPTION '% rows where total <> amount', n; END IF; END $$;"},
+
+  {"note": "Contract: drop the trigger and the amount column together in one short transaction (DROP COLUMN is metadata-only), then the function.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '500ms', true); FOR i IN 1..60 LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; DROP TRIGGER orders_sync_amount_total ON orders; ALTER TABLE orders DROP COLUMN amount; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$; DROP FUNCTION orders_sync_amount_total();"}
+]}

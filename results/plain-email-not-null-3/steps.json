@@ -1,0 +1,66 @@
+[
+ {
+  "note": "Roll the app to store '' (not NULL) as the email of guest orders. The deploy waits for the rollout, so afterwards no pod writes NULL emails any more.",
+  "kind": "deploy",
+  "start": 1792506283.193346,
+  "end": 1792506286.1421561,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID: enforced for new writes from now on, no scan of existing rows. Needs a brief ACCESS EXCLUSIVE lock, so take it with a short lock_timeout and retry, never queueing app traffic behind it for long.",
+  "kind": "sql",
+  "start": 1792506286.1421561,
+  "end": 1792506286.402738,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill: set email = '' on the existing guest orders, in id ranges of 50,000 with a commit after each batch, so locks and transactions stay short.",
+  "kind": "sql",
+  "start": 1792506286.402738,
+  "end": 1792506302.56348,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Clean up the dead row versions left by the backfill.",
+  "kind": "sql",
+  "start": 1792506302.56348,
+  "end": 1792506319.6439958,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint: one scan of the table under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails if any NULL email is left.",
+  "kind": "sql",
+  "start": 1792506319.6439958,
+  "end": 1792506321.282209,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL: Postgres uses the validated CHECK constraint as proof and skips the table scan, so the ACCESS EXCLUSIVE lock is only held for an instant. Short lock_timeout with retries.",
+  "kind": "sql",
+  "start": 1792506321.282209,
+  "end": 1792506321.5587156,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the now redundant CHECK constraint (same short-lock retry).",
+  "kind": "sql",
+  "start": 1792506321.5587156,
+  "end": 1792506321.8200922,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the result: orders.email is NOT NULL.",
+  "kind": "sql",
+  "start": 1792506321.8247108,
+  "end": 1792506322.0758674,
+  "ok": true,
+  "output": ""
+ }
+]

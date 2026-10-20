@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Add the foreign key as NOT VALID: catalog-only, no scan of the 10M orders, so it holds its SHARE ROW EXCLUSIVE lock on orders/customers for only milliseconds. From here on every new or updated order is checked. Each attempt waits at most 200 ms for the lock (so app queries never queue behind it for longer) and is retried up to 60 times. Skips if the constraint already exists, so the step can be re-run.",
+  "kind": "sql",
+  "start": 1792500896.5342405,
+  "end": 1792500896.8300276,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing rows. VALIDATE CONSTRAINT takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, which do not conflict with the app's reads and inserts, so traffic keeps flowing while it scans. No statement timeout, since the scan of 10M rows can take a while. If any order pointed at a missing customer this would fail and change nothing; checked beforehand: there are none.",
+  "kind": "sql",
+  "start": 1792500896.8300276,
+  "end": 1792500898.700027,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check that the constraint exists and is validated; fail loudly otherwise.",
+  "kind": "sql",
+  "start": 1792500898.700027,
+  "end": 1792500898.9529345,
+  "ok": true,
+  "output": ""
+ }
+]

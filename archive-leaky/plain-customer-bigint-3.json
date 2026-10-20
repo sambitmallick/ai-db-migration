@@ -1,0 +1,85 @@
+{
+  "task": "customer-bigint",
+  "steps": [
+    {
+      "note": "Trigger function that copies customer_id into customer_id_new on every insert (and on any update of customer_id).",
+      "sql": "CREATE OR REPLACE FUNCTION orders_sync_customer_id_new() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.customer_id_new := NEW.customer_id; RETURN NEW; END $f$;"
+    },
+    {
+      "note": "Add a nullable bigint column customer_id_new (metadata only, no table rewrite) and the sync trigger in one transaction, so every row inserted from now on has it filled. Short lock_timeout with retries, so the app's queries never queue behind this for long.",
+      "sql": "DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD COLUMN customer_id_new bigint; CREATE TRIGGER orders_sync_customer_id_new BEFORE INSERT OR UPDATE OF customer_id ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_customer_id_new(); EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 300 THEN RAISE; END IF; PERFORM pg_sleep(0.1); END; END LOOP; END $$;"
+    },
+    {
+      "note": "Backfill customer_id_new for ids 1..1000000, 100000 rows per statement (row locks on existing rows only; the app never updates orders).",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 0 AND id <= 100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 100000 AND id <= 200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 200000 AND id <= 300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 300000 AND id <= 400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 400000 AND id <= 500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 500000 AND id <= 600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 600000 AND id <= 700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 700000 AND id <= 800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 800000 AND id <= 900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 900000 AND id <= 1000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 1000001..2000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 1000000 AND id <= 1100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1100000 AND id <= 1200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1200000 AND id <= 1300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1300000 AND id <= 1400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1400000 AND id <= 1500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1500000 AND id <= 1600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1600000 AND id <= 1700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1700000 AND id <= 1800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1800000 AND id <= 1900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 1900000 AND id <= 2000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 2000001..3000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 2000000 AND id <= 2100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2100000 AND id <= 2200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2200000 AND id <= 2300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2300000 AND id <= 2400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2400000 AND id <= 2500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2500000 AND id <= 2600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2600000 AND id <= 2700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2700000 AND id <= 2800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2800000 AND id <= 2900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 2900000 AND id <= 3000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 3000001..4000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 3000000 AND id <= 3100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3100000 AND id <= 3200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3200000 AND id <= 3300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3300000 AND id <= 3400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3400000 AND id <= 3500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3500000 AND id <= 3600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3600000 AND id <= 3700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3700000 AND id <= 3800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3800000 AND id <= 3900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 3900000 AND id <= 4000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 4000001..5000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 4000000 AND id <= 4100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4100000 AND id <= 4200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4200000 AND id <= 4300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4300000 AND id <= 4400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4400000 AND id <= 4500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4500000 AND id <= 4600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4600000 AND id <= 4700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4700000 AND id <= 4800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4800000 AND id <= 4900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 4900000 AND id <= 5000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 5000001..6000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 5000000 AND id <= 5100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5100000 AND id <= 5200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5200000 AND id <= 5300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5300000 AND id <= 5400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5400000 AND id <= 5500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5500000 AND id <= 5600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5600000 AND id <= 5700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5700000 AND id <= 5800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5800000 AND id <= 5900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 5900000 AND id <= 6000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 6000001..7000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 6000000 AND id <= 6100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6100000 AND id <= 6200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6200000 AND id <= 6300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6300000 AND id <= 6400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6400000 AND id <= 6500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6500000 AND id <= 6600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6600000 AND id <= 6700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6700000 AND id <= 6800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6800000 AND id <= 6900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 6900000 AND id <= 7000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 7000001..8000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 7000000 AND id <= 7100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7100000 AND id <= 7200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7200000 AND id <= 7300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7300000 AND id <= 7400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7400000 AND id <= 7500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7500000 AND id <= 7600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7600000 AND id <= 7700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7700000 AND id <= 7800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7800000 AND id <= 7900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 7900000 AND id <= 8000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 8000001..9000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 8000000 AND id <= 8100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8100000 AND id <= 8200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8200000 AND id <= 8300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8300000 AND id <= 8400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8400000 AND id <= 8500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8500000 AND id <= 8600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8600000 AND id <= 8700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8700000 AND id <= 8800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8800000 AND id <= 8900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 8900000 AND id <= 9000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill ids 9000001..10000000.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 9000000 AND id <= 9100000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9100000 AND id <= 9200000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9200000 AND id <= 9300000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9300000 AND id <= 9400000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9400000 AND id <= 9500000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9500000 AND id <= 9600000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9600000 AND id <= 9700000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9700000 AND id <= 9800000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9800000 AND id <= 9900000 AND customer_id_new IS NULL; UPDATE orders SET customer_id_new = customer_id WHERE id > 9900000 AND id <= 10000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Backfill the rest: orders the app inserted before the trigger existed (ids above 10000000). Later inserts are filled by the trigger.",
+      "sql": "UPDATE orders SET customer_id_new = customer_id WHERE id > 10000000 AND customer_id_new IS NULL;"
+    },
+    {
+      "note": "Add CHECK (customer_id_new IS NOT NULL) NOT VALID: a brief lock and no scan; enforced for new rows from now on. Retries on a short lock_timeout.",
+      "sql": "DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD CONSTRAINT orders_customer_id_new_not_null CHECK (customer_id_new IS NOT NULL) NOT VALID; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 300 THEN RAISE; END IF; PERFORM pg_sleep(0.1); END; END LOOP; END $$;"
+    },
+    {
+      "note": "Validate the check: a full scan under SHARE UPDATE EXCLUSIVE, which does not block the app's reads or inserts. Fails, and stops the plan, if any row was missed.",
+      "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_not_null;"
+    },
+    {
+      "note": "Verify every row has customer_id_new = customer_id before the swap; raises, and stops the plan, on any mismatch.",
+      "sql": "DO $$ DECLARE bad bigint; BEGIN SELECT count(*) INTO bad FROM orders WHERE customer_id_new IS DISTINCT FROM customer_id; IF bad > 0 THEN RAISE EXCEPTION '% rows have customer_id_new <> customer_id', bad; END IF; END $$;"
+    },
+    {
+      "note": "Swap in one short transaction: SET NOT NULL (no scan; the validated check proves it), drop the trigger, drop the old integer column, rename customer_id_new to customer_id, drop the now-redundant check. All metadata only, so the exclusive lock is held for milliseconds. The app keeps using the name customer_id, so no deploy is needed. Retries on a short lock_timeout.",
+      "sql": "DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ALTER COLUMN customer_id_new SET NOT NULL; DROP TRIGGER orders_sync_customer_id_new ON orders; ALTER TABLE orders DROP COLUMN customer_id; ALTER TABLE orders RENAME COLUMN customer_id_new TO customer_id; ALTER TABLE orders DROP CONSTRAINT orders_customer_id_new_not_null; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 300 THEN RAISE; END IF; PERFORM pg_sleep(0.1); END; END LOOP; END $$;"
+    },
+    {
+      "note": "Drop the sync trigger function, no longer used.",
+      "sql": "DROP FUNCTION orders_sync_customer_id_new();"
+    },
+    {
+      "note": "Check the result: orders.customer_id is bigint NOT NULL; raises otherwise.",
+      "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'orders'::regclass AND attname = 'customer_id' AND atttypid = 'bigint'::regtype AND attnotnull AND NOT attisdropped) THEN RAISE EXCEPTION 'orders.customer_id is not bigint NOT NULL'; END IF; END $$;"
+    },
+    {
+      "note": "Reclaim the dead row versions left by the backfill and refresh statistics (does not block reads or writes).",
+      "sql": "VACUUM (ANALYZE) orders;"
+    }
+  ]
+}

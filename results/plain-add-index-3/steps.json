@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Remove any invalid leftover of this index from an earlier interrupted CONCURRENTLY build (none exists now; no-op). Alone in its step: CONCURRENTLY cannot run inside a transaction block.",
+  "kind": "sql",
+  "start": 1792503391.177723,
+  "end": 1792503391.424744,
+  "ok": true,
+  "output": "NOTICE:  index \"orders_customer_id_idx\" does not exist, skipping"
+ },
+ {
+  "note": "Build the index without blocking the app's inserts/reads. (customer_id, id) serves WHERE customer_id = $1 ORDER BY id DESC LIMIT 10 directly: an index scan backwards, no sort. Takes a SHARE UPDATE EXCLUSIVE lock only, which does not conflict with INSERT/SELECT.",
+  "kind": "sql",
+  "start": 1792503391.424744,
+  "end": 1792503399.9213066,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Fail the plan if the build left the index invalid (e.g. it was cancelled), so it never silently goes unused.",
+  "kind": "sql",
+  "start": 1792503399.9213066,
+  "end": 1792503400.173893,
+  "ok": true,
+  "output": ""
+ }
+]

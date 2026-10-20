@@ -1,0 +1,18 @@
+[
+ {
+  "note": "Build the index without blocking reads or writes. CONCURRENTLY only takes a SHARE UPDATE EXCLUSIVE lock, so the app's INSERTs and SELECTs keep running. (customer_id, id) lets GET /customer's 'WHERE customer_id = $1 ORDER BY id DESC LIMIT 10' read 10 index entries with no sort. IF NOT EXISTS: the live database already has this exact index, so on that database this step changes nothing. No rows are touched either way.",
+  "kind": "sql",
+  "start": 1792497397.04903,
+  "end": 1792497409.3905287,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check that the index is valid and leads with customer_id. A failed concurrent build leaves an INVALID index behind, and IF NOT EXISTS would skip it silently, so stop loudly if that happened.",
+  "kind": "sql",
+  "start": 1792497409.3905287,
+  "end": 1792497409.717581,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,13 @@
+{"task": "customer-fk", "steps": [
+  {"note": "Pre-check: stop before changing anything if any order points at a missing customer (seed data has none). Read-only scan, no locks that block the app.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM orders o WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id); IF n > 0 THEN RAISE EXCEPTION '% orders reference missing customers; fix the data before adding the FK', n; END IF; END $$;"},
+
+  {"note": "Add the FK as NOT VALID: no table scan, so the SHARE ROW EXCLUSIVE lock on orders/customers is held for milliseconds. lock_timeout 300ms + retry so app inserts never queue behind us for long. From here on every new/updated order is checked. Skips if the constraint already exists.",
+   "sql": "DO $$ DECLARE tries int := 0; BEGIN IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'orders'::regclass AND conname = 'orders_customer_id_fkey') THEN RAISE NOTICE 'orders_customer_id_fkey already exists'; RETURN; END IF; LOOP BEGIN PERFORM set_config('lock_timeout', '300ms', true); ALTER TABLE orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers(id) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 50 THEN RAISE; END IF; PERFORM pg_sleep(0.2); END; END LOOP; END $$;"},
+
+  {"note": "Validate the existing 10M rows. VALIDATE CONSTRAINT takes only SHARE UPDATE EXCLUSIVE on orders (and ROW SHARE on customers), so app reads and inserts keep running during the scan. No-op if already valid.",
+   "sql": "SET statement_timeout = 0; SET lock_timeout = '30s'; ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_fkey;"},
+
+  {"note": "Verify: the FK exists, references customers(id) and is validated; fail the plan otherwise.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'orders'::regclass AND conname = 'orders_customer_id_fkey' AND contype = 'f' AND confrelid = 'customers'::regclass AND convalidated) THEN RAISE EXCEPTION 'orders_customer_id_fkey missing or not validated'; END IF; END $$;"}
+]}

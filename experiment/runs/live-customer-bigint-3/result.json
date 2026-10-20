@@ -1,0 +1,59 @@
+{
+ "run": "live-customer-bigint-3",
+ "task": "customer-bigint",
+ "mode": "live",
+ "prompt": "/migrate customer-bigint plans/live-customer-bigint-3.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 219,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 27,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-bigint\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; ls plans tasks; bash scripts/db-ro.sh \\\"\\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"\\\\d customers\\\"\", \"description\": \"Inspect db script and live orders schema\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version();\\\" && bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema','pg_toast');\\\" && bash scripts/db-ro.sh \\\"select tgname, tg"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"explain (analyze, buffers) SELECT id, amount FROM orders WHERE customer_id = 123 ORDER BY id DESC LIMIT 10;\\\" ; bash scripts/db-ro.sh \\\"select pid, state, xact_start, now()-query_start as dur, left(query,80) from pg_stat_activity where datname='shop';\\\"; bash scr"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls ../harness ../scripts 2>/dev/null | head -30; which python node\", \"description\": \"Check runner location and available interpreters\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-bigint-3.json\", \"content\": \"{\\\"task\\\": \\\"customer-bigint\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Trigger function that copies customer_id into the new bigint column on every insert/update. Touches no "
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01T8S1nqQ8NeNm5xjAKtLbrZ",
+   "tool_input": {
+    "command": "ls ../harness ../scripts 2>/dev/null | head -30; which python node",
+    "description": "Check runner location and available interpreters"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-bigint-3.json`. I haven't run it, because the runner does that. I also couldn't run a JSON syntax check (the shell was denied), so I checked the file by eye.\n\n**What it does:**\n\n1. **Adds a new column, kept in sync.** In one short transaction, it adds a nullable `customer_id_new bigint`, a trigger that copies `customer_id` into it on every insert and update, and two checks that only apply to new rows for now (`NOT VALID`): \"not null\" and \"equals `customer_id`\". New orders are covered from that moment.\n2. **Fills in the existing rows.** It copies the 10M existing rows in 5,000-row batches, committing after each batch, in 10 steps of 1M ids. After each step it runs `VACUUM` so the space freed by the copy gets reused and the table doesn't double in size. The last step goes up to whatever the highest order id is at that point.\n3. **Proves the copy is complete.** It runs `VALIDATE` on both checks. That proves every row has a non-null value equal to the old one, and it doesn't block the app's reads or writes. If any row was missed, the plan stops there and the app keeps working on the old column.\n4. **Swaps the columns.** In one transaction it drops the trigger, sets `NOT NULL` (no table scan, because the validated check already proves there are no nulls), drops the old `integer` column, and renames `customer_id_new` to `customer_id`. These are all quick catalog changes, so the exclusive lock lasts milliseconds.\n5. **Cleans up and checks.** It drops the trigger function and confirms `orders.customer_id` is now `bigint NOT NULL`.\n\n**Why this shouldn't cause errors or downtime:**\n- The two steps that need a lock the app would wait on (1 and 4) give up after 200ms and retry, up to 100 times. App queries never wait more than about 200ms, well under their 2-second timeout. If a lock can't be obtained, the step fails with nothing changed and the plan stops.\n- The app doesn't need a redeploy: its SQL refers to `customer_id` by name, and a"
+}

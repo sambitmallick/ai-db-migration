@@ -1,0 +1,67 @@
+{
+ "run": "live-email-not-null-1",
+ "task": "email-not-null",
+ "mode": "live",
+ "prompt": "/migrate email-not-null plans/live-email-not-null-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 104,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 6,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\email-not-null\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls harness scripts plans tasks; cat scripts/db-ro.sh\", \"description\": \"List harness, scripts, plans, tasks\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select version();\\\" && bash scripts/db-ro.sh \\\"\\\\d orders\\\" && bash scripts/db-ro.sh \\\"select count(*) filter (where email is null) nulls, count(*) filter (where email='') empties, max(i"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema','pg_toast'); select * from pg"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d audit.written\\\" && bash scripts/db-ro.sh \\\"\\\\d audit.snap\\\" && bash scripts/db-ro.sh \\\"select count(*) from audit.written; select count(*) from audit.snap;\\\"\", \"description\": \"Inspec"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select * from pg_db_role_setting; select name, boot_val, reset_val, source from pg_settings where name in ('statement_timeout','lock_timeout');\\\"\", \"description\": \"Check database and rol"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-email-not-null-1.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Roll the app so guest orders store '' instead of NULL. From here on the app never writes a NULL email.\\\","
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/live-email-not-null-1.json'); console.log(p.steps.length, 'steps ok')\\\"\", \"description\": \"Check the plan file is valid JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01ENEU51qyEvZHLZuyxK2mok",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/live-email-not-null-1.json'); console.log(p.steps.length, 'steps ok')\"",
+    "description": "Check the plan file is valid JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-email-not-null-1.json`. I haven't run it. I tried to check that the file is valid JSON, but the command was blocked, so I only checked it by reading it. The live database has 2,501,154 orders with no email (about 10M orders in all).\n\nThe plan has six steps, in this order:\n\n1. **Change the app first:** roll out `GUEST_EMAIL=empty`, so new guest orders store `''` instead of NULL.\n2. **Wait 15 s:** old pods that are shutting down can still be finishing requests that insert NULL. If the rule from step 3 went on while one was in flight, that request would fail.\n3. **Block new NULLs:** add `CHECK (email IS NOT NULL) NOT VALID`. This doesn't scan the table, but it needs a brief lock that also blocks the app's queries. So it waits at most 300 ms for the lock, and if it can't get it, it lets go and tries again, up to 60 times. App requests are never held up for long.\n4. **Fill in the existing rows:** set email to `''` where it is NULL, 50,000 ids at a time (about 12,500 rows), saving each batch before the next. No other value changes. The app only inserts and reads orders and never updates them, so these row locks don't get in its way. The batches stop at the highest id that exists when this step starts. That's enough, because the rule from step 3 stops any newer row from being NULL.\n5. **Check every row against the rule:** this scans the whole table, but reads and inserts keep running during it. If any NULL were left, this step would fail and the plan would stop with nothing broken.\n6. **Make the column NOT NULL, then remove the extra rule:** the database trusts the rule from step 5 and skips another scan. Both changes go in one short transaction, with the same 300 ms wait-and-retry as step 3.\n\n- **Extra table space:** step 4 rewrites about 2.5M rows, so the table will carry about 25% dead rows until Postgres's automatic cleanup (autovacuum) clears them. The plan doesn't clean them up itself.\n- **App setting:** `GUEST_EMAIL` stays at `empty` "
+}

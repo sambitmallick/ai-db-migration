@@ -1,0 +1,22 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Make the app store '' instead of NULL for guest orders. After the rolling update no writer produces NULL emails any more.",
+   "deploy": {"AMOUNT_READ": "amount", "AMOUNT_WRITE": "amount", "GUEST_EMAIL": "empty"}},
+
+  {"note": "Add CHECK (email IS NOT NULL) NOT VALID: enforced for new rows, no scan of existing ones. It needs a brief ACCESS EXCLUSIVE lock, so try with a short lock_timeout and retry instead of queueing in front of the app's queries.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', false); LOOP BEGIN ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"},
+
+  {"note": "Backfill: set email = '' on old guest orders in id batches of 50,000, committing after each batch so row locks and transactions stay short. The app only inserts and reads, so it is never blocked.",
+   "sql": "DO $$ DECLARE lo bigint := 0; hi bigint; step constant bigint := 50000; BEGIN SELECT coalesce(max(id), 0) INTO hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET email = '' WHERE id >= lo AND id < lo + step AND email IS NULL; COMMIT; lo := lo + step; PERFORM pg_sleep(0.02); END LOOP; END $$;"},
+
+  {"note": "Vacuum away the ~2.5M dead row versions now (SHARE UPDATE EXCLUSIVE, does not block the app), so that autovacuum isn't running on the table when we need the lock later.",
+   "sql": "VACUUM (ANALYZE) orders;"},
+
+  {"note": "Validate the constraint: a full scan under SHARE UPDATE EXCLUSIVE, which does not block the app's reads or inserts.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL. With the valid CHECK constraint in place, Postgres skips the table scan, so the ACCESS EXCLUSIVE lock lasts only a moment. Short lock_timeout with retries, as before.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', false); LOOP BEGIN ALTER TABLE orders ALTER COLUMN email SET NOT NULL; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"},
+
+  {"note": "Drop the helper CHECK constraint; the NOT NULL column constraint now covers it. Brief lock again, same retry loop.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', false); LOOP BEGIN ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_email_not_null; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"}
+]}

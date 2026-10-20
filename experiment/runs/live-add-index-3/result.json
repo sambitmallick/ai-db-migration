@@ -1,0 +1,46 @@
+{
+ "run": "live-add-index-3",
+ "task": "add-index",
+ "mode": "live",
+ "prompt": "/migrate add-index plans/live-add-index-3.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 91,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT c.relname, i.indisvalid, i.indisready, pg_get_indexdef(i.indexrelid) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE i.indrelid='orders'::regclass;\\\" ; bash scripts/db"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls scripts harness plans; grep -rn \\\"psql\\\" scripts harness 2>/dev/null | head -20\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT r.rolname, s.setconfig FROM pg_db_role_setting s LEFT JOIN pg_roles r ON r.oid=s.setrole; SELECT name, setting FROM pg_settings WHERE name IN ('statement_timeout','lock_timeout','"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT name, setting, source, boot_val, reset_val FROM pg_settings WHERE name IN ('statement_timeout','lock_timeout');\\\"\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-add-index-3.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Remove any leftover (e.g. INVALID, from an interrupted earlier build) index of the same name. CONCURRENTLY so it ne"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/live-add-index-3.json`. It changes no data and needs no app deploy. The app keeps reading and writing while it runs.\n\n1. **Clean up first:** `DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_id_idx`. This only matters if an earlier interrupted build left a broken copy behind. Right now the live database has only the primary key, so this step does nothing.\n2. **Build the index:** `CREATE INDEX CONCURRENTLY orders_customer_id_id_idx ON orders (customer_id, id)`.\n   - **No blocking:** `CONCURRENTLY` takes a light lock that doesn't stop INSERTs or SELECTs, so there are no errors or downtime at 60 requests a second.\n   - **Why two columns:** I added `id` because the customer page sorts by id and takes the last 10 (`WHERE customer_id = $1 ORDER BY id DESC LIMIT 10`). With this index Postgres reads those 10 rows straight off it, with no full scan and no sort.\n   - **Own step:** this statement has to run on its own because Postgres won't run it inside a transaction.\n   - **No time limit:** the account the plan runs as has no statement time limit, so the build of this 751 MB table won't be cut off.\n3. **Check the result:** a final step makes the plan fail loudly if the index didn't come out valid and ready to use."
+}

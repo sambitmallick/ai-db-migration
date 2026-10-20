@@ -1,0 +1,54 @@
+{
+ "run": "live-email-not-null-1",
+ "task": "email-not-null",
+ "mode": "live",
+ "prompt": "/migrate email-not-null plans/live-email-not-null-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 105,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 7,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\email-not-null\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select version(); select conname, contype, pg_get_constraintdef(oid) from pg_constraint where conrelid='orders'::regclass; select indexdef from pg_indexes where tablename='orders'; selec"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls harness scripts plans; cat scripts/db-ro.sh; grep -rn \\\"psql\\\" harness scripts | head -30\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-email-not-null-1.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Roll the app so new guest orders store '' instead of NULL. Nothing in the database has changed yet, so ol"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/live-email-not-null-1.json'); console.log(p.steps.length)\\\"\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01GsE7fP4Qj5ZR5QBWC97DSe",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/live-email-not-null-1.json'); console.log(p.steps.length)\""
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-email-not-null-1.json`. It hasn't been run. I also couldn't check that the file parses as JSON, because running a parse check with node was denied; I wrote it by hand and checked it by eye.\n\nWhat the live database showed: Postgres 17, about 10 million orders, of which 2,500,099 have a NULL email and none have an empty string. The only constraint is the primary key, and there are no triggers.\n\nThe plan has seven steps:\n\n1. **Update the app first.** Deploy with `GUEST_EMAIL=empty`, so new guest orders store `''`. The database hasn't changed at this point, so old and new pods both work during the rollout. The plan then waits 5 seconds for the old pods' last requests to finish.\n2. **Block new NULLs.** Add `CHECK (email IS NOT NULL) NOT VALID`. This needs a brief exclusive lock on the table. Each attempt waits at most 100 ms (the app's own limit is 2 s) and then retries, so app queries never stack up behind it.\n3. **Backfill.** Set `email = ''` only where it is NULL, in batches of 50,000 ids, with a commit and a short pause after each batch. No other column or row is touched. The app only inserts and reads, so these row locks never block it.\n4. **Validate the constraint.** One full scan proves no NULLs are left. This lock doesn't block the app's reads or inserts. If any NULL were left, this step fails and the plan stops.\n5. **Make the column NOT NULL and drop the temporary check.** Postgres can use the validated check instead of scanning the table again, so the exclusive lock lasts only a moment. It uses the same short-timeout retry as step 2.\n6. **Confirm.** A final query checks that `orders.email` is now NOT NULL.\n\nTwo things to know before running it:\n\n- The backfill step and the two lock-retry steps rely on each step's SQL being sent as a single statement (each is one `DO` block on its own). If the runner bundles a step's statements into one transaction, the backfill's commit-per-batch would fail.\n- Once the migration is done, the app "
+}

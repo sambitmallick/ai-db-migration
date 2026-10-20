@@ -1,0 +1,258 @@
+[
+ {
+  "note": "Create the trigger function that keeps amount and total equal on every insert/update, whichever of the two the writer sets (old app writes amount, new app writes total).",
+  "kind": "sql",
+  "start": 1792508528.6905477,
+  "end": 1792508528.9728603,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add nullable column total numeric(10,2) (metadata-only, no rewrite) and the sync trigger in one transaction, so every row written from now on has total. The lock is taken with a 200 ms lock_timeout and retried, so app queries never queue behind it for long.",
+  "kind": "sql",
+  "start": 1792508528.9728603,
+  "end": 1792508529.2883515,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill total = amount for ids 1..1,000,000 in 250k-row batches, each committed on its own (row locks only; the app never updates existing orders).",
+  "kind": "sql",
+  "start": 1792508529.2883515,
+  "end": 1792508537.9262624,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum so the dead row versions from the backfill are reused instead of bloating the table.",
+  "kind": "sql",
+  "start": 1792508537.9262624,
+  "end": 1792508539.0573158,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1,000,001..2,000,000.",
+  "kind": "sql",
+  "start": 1792508539.0573158,
+  "end": 1792508547.844192,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508547.8457031,
+  "end": 1792508549.1802015,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,000,001..3,000,000.",
+  "kind": "sql",
+  "start": 1792508549.1802015,
+  "end": 1792508557.6666186,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508557.6666186,
+  "end": 1792508558.6241248,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 3,000,001..4,000,000.",
+  "kind": "sql",
+  "start": 1792508558.6241248,
+  "end": 1792508566.941936,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508566.941936,
+  "end": 1792508567.9839003,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4,000,001..5,000,000.",
+  "kind": "sql",
+  "start": 1792508567.9839003,
+  "end": 1792508577.2192822,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508577.2192822,
+  "end": 1792508578.225019,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5,000,001..6,000,000.",
+  "kind": "sql",
+  "start": 1792508578.225019,
+  "end": 1792508587.04934,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508587.0544605,
+  "end": 1792508588.2092087,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6,000,001..7,000,000.",
+  "kind": "sql",
+  "start": 1792508588.2092087,
+  "end": 1792508597.147985,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508597.147985,
+  "end": 1792508598.2730608,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7,000,001..8,000,000.",
+  "kind": "sql",
+  "start": 1792508598.2730608,
+  "end": 1792508607.147921,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508607.147921,
+  "end": 1792508608.18981,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8,000,001..9,000,000.",
+  "kind": "sql",
+  "start": 1792508608.18981,
+  "end": 1792508616.8817608,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508616.8817608,
+  "end": 1792508617.9044325,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 9,000,001..10,000,000.",
+  "kind": "sql",
+  "start": 1792508617.9044325,
+  "end": 1792508626.6152174,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792508626.6152174,
+  "end": 1792508627.7064183,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill whatever is left above id 10,000,000 (orders inserted before the trigger existed; later ones already have total).",
+  "kind": "sql",
+  "start": 1792508627.7064183,
+  "end": 1792508628.0638428,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (total IS NOT NULL) as NOT VALID: brief lock, no scan, retried on lock timeout.",
+  "kind": "sql",
+  "start": 1792508628.0638428,
+  "end": 1792508628.3988411,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check: a full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails (and stops the plan) if any row still has a NULL total.",
+  "kind": "sql",
+  "start": 1792508628.3988411,
+  "end": 1792508630.5742602,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL on total (Postgres proves it from the validated check, so no scan), then drop the redundant check. Brief lock, retried.",
+  "kind": "sql",
+  "start": 1792508630.5742602,
+  "end": 1792508630.8786652,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify every row has total = amount before switching the app; stops the plan if not.",
+  "kind": "sql",
+  "start": 1792508630.8786652,
+  "end": 1792508632.5567527,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Roll the app over to read and write total. While old pods (amount) and new pods (total) coexist during the rolling update, the trigger fills whichever column a writer leaves out, so both stay correct.",
+  "kind": "deploy",
+  "start": 1792508632.5567527,
+  "end": 1792508637.4639351,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish their in-flight requests and close their database connections.",
+  "kind": "wait",
+  "start": 1792508637.4639351,
+  "end": 1792508657.4652188,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Make sure no connection is still running the old app's SQL (which names amount); wait up to 60 s, otherwise stop before anything is dropped.",
+  "kind": "sql",
+  "start": 1792508657.4652188,
+  "end": 1792508657.7529676,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check total = amount for every row one last time, then drop the sync trigger and the amount column in one short metadata-only transaction (lock retried).",
+  "kind": "sql",
+  "start": 1792508657.7529676,
+  "end": 1792508659.3775878,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the trigger function and refresh planner statistics.",
+  "kind": "sql",
+  "start": 1792508659.3775878,
+  "end": 1792508659.8515954,
+  "ok": true,
+  "output": ""
+ }
+]

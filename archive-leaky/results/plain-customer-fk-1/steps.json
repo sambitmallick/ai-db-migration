@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Add the foreign key as NOT VALID: checks every new/updated order from now on without scanning the 10M existing rows. It needs a brief SHARE ROW EXCLUSIVE lock on orders and customers, which blocks inserts while held, so take it with a 200 ms lock_timeout and retry (up to 50 times) instead of queueing behind in-flight inserts and stalling the app. Skipped if the constraint already exists.",
+  "kind": "sql",
+  "start": 1792496366.5822983,
+  "end": 1792496367.0138664,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing rows. VALIDATE CONSTRAINT holds only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so the app keeps reading and inserting during the full scan. No statement timeout (the scan of ~1.3 GB can take a while); lock_timeout so it never waits indefinitely. If an orphaned order exists this fails and the plan stops, leaving the NOT VALID constraint in place (still enforced for new rows).",
+  "kind": "sql",
+  "start": 1792496367.0138664,
+  "end": 1792496369.733669,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the constraint exists and is validated.",
+  "kind": "sql",
+  "start": 1792496369.733669,
+  "end": 1792496370.1199458,
+  "ok": true,
+  "output": ""
+ }
+]

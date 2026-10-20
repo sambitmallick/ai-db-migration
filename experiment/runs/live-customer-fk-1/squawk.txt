@@ -1,0 +1,1 @@
+SQUAWK lock risk: none | may break app: none | hygiene: 1

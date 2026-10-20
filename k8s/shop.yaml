@@ -1,0 +1,27 @@
+# The shop: 3 replicas behind one Service. AMOUNT_READ / AMOUNT_WRITE / GUEST_EMAIL: see app/server.js.
+apiVersion: v1
+kind: Service
+metadata: { name: shop }
+spec: { selector: { app: shop }, ports: [{ port: 8080 }] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: shop }
+spec:
+  replicas: 3
+  selector: { matchLabels: { app: shop } }
+  strategy: { rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  template:
+    metadata: { labels: { app: shop } }
+    spec:
+      containers:
+        - name: shop
+          image: localhost/shop-db:1.0
+          imagePullPolicy: Never
+          env:
+            - { name: DATABASE_URL, value: "postgres://postgres:shop@postgres:5432/shop" }
+            - { name: AMOUNT_READ, value: amount }
+            - { name: AMOUNT_WRITE, value: amount }
+            - { name: GUEST_EMAIL, value: "null" }
+          readinessProbe: { httpGet: { path: /healthz, port: 8080 }, periodSeconds: 2 }
+          resources: { requests: { cpu: 100m, memory: 64Mi }, limits: { memory: 160Mi } }

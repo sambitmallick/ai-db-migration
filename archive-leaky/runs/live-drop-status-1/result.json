@@ -1,0 +1,42 @@
+{
+ "run": "live-drop-status-1",
+ "task": "drop-status",
+ "mode": "live",
+ "prompt": "/migrate drop-status plans/live-drop-status-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 48,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 0,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\drop-status\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select schemaname, viewname from pg_views where schemaname not in ('pg_catalog','information_schema'); select tgname, tgrelid::regclass from pg_trigger where not tgisinternal; select nspname from pg_namespace; select status,"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"\\\\dt+ audit.*\\\" ; bash scripts/db-ro.sh \\\"\\\\df audit.*\\\"; bash scripts/db-ro.sh \\\"select count(*) from pg_stat_statements\\\" 2>&1 | head -3; ls plans tasks\", \"description\": \"Inspect audit schema and plans folder\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-drop-status-1.json\", \"content\": \"{\\\"task\\\": \\\"drop-status\\\", \\\"steps\\\": []}\\n\"}"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote `plans/live-drop-status-1.json` with no steps: running it changes nothing. Dropping `orders.status` can't be done safely right now, for two reasons.\n\n**1. The app still uses `status`.** The task says the column isn't used any more, but the running app (`shop-db:1.0`) writes and reads it:\n- Every new order runs `INSERT INTO orders (..., status, email) VALUES (..., 'new', $3)` (`app/server.js:25`).\n- Every order lookup runs `SELECT id, customer_id, ... status, email FROM orders` (`app/server.js:27`).\n\n`AMOUNT_READ`, `AMOUNT_WRITE` and `GUEST_EMAIL` don't control `status`, so changing settings can't stop the app using it. If the column is dropped, every `/order` and `/order/ID` request fails with \"column status does not exist\" across all three replicas. At 60 requests a second, that's an outage.\n\n**2. Dropping the column deletes data.** The live column holds real values for 10,002,528 orders: about 2.5 million each of `paid`, `shipped` and `delivered`, and about 2.5 million `new`. Dropping it breaks your \"must not lose any data\" rule unless you agree those values can go or should be archived first.\n\n**What has to happen before this can run:**\n1. Release a new app image that stops writing and reading `status`, and roll it out to all replicas.\n2. Decide whether the old status values need keeping. If yes, copy `id, status` into an archive table first.\n3. Drop the column with a short lock timeout and retries, for example `SET lock_timeout = '1s'; ALTER TABLE orders DROP COLUMN status;`. The drop only changes the table definition and doesn't rewrite the table, but it needs a brief exclusive lock. The timeout stops it from holding up live traffic while it waits for that lock.\n\nOnce the new app image is out and you've decided about the old values, I can write the real plan."
+}

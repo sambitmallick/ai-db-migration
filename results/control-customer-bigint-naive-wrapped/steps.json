@@ -1,0 +1,10 @@
+[
+ {
+  "note": "the same ALTER COLUMN TYPE, inside a DO block",
+  "kind": "sql",
+  "start": 1792516894.3248065,
+  "end": 1792516908.1905127,
+  "ok": true,
+  "output": ""
+ }
+]

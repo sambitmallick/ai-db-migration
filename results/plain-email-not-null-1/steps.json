@@ -1,0 +1,90 @@
+[
+ {
+  "note": "App stores '' instead of NULL for guest orders from now on (rolling update, no downtime).",
+  "kind": "deploy",
+  "start": 1792505830.852228,
+  "end": 1792505833.9489183,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let the old pods finish their in-flight requests and exit.",
+  "kind": "wait",
+  "start": 1792505833.9489183,
+  "end": 1792505843.9493182,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Forbid new NULL emails: CHECK constraint NOT VALID (no table scan, momentary lock). Short lock_timeout with retries so app queries never queue behind a waiting ALTER.",
+  "kind": "sql",
+  "start": 1792505843.9493182,
+  "end": 1792505844.2001255,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill guest orders, ids 1..3,500,000: batches of 500k ids (~125k rows), each its own transaction.",
+  "kind": "sql",
+  "start": 1792505844.2001255,
+  "end": 1792505849.4708824,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill guest orders, ids 3,500,001..7,000,000.",
+  "kind": "sql",
+  "start": 1792505849.4708824,
+  "end": 1792505854.6929705,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill guest orders, ids 7,000,001..10,500,000.",
+  "kind": "sql",
+  "start": 1792505854.6929705,
+  "end": 1792505859.1187654,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Sweep any NULL email left anywhere (e.g. ids beyond the batched range).",
+  "kind": "sql",
+  "start": 1792505859.1187654,
+  "end": 1792505867.616391,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the CHECK constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes.",
+  "kind": "sql",
+  "start": 1792505867.616391,
+  "end": 1792505868.8678126,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL: Postgres uses the validated CHECK to skip the table scan, so the exclusive lock is momentary. Same lock_timeout + retry.",
+  "kind": "sql",
+  "start": 1792505868.8678126,
+  "end": 1792505869.1320877,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the now-redundant CHECK constraint.",
+  "kind": "sql",
+  "start": 1792505869.1320877,
+  "end": 1792505869.3799744,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify: orders.email is NOT NULL (fails the plan otherwise).",
+  "kind": "sql",
+  "start": 1792505869.3799744,
+  "end": 1792505869.635398,
+  "ok": true,
+  "output": ""
+ }
+]

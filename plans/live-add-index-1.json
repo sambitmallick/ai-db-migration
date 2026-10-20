@@ -1,0 +1,8 @@
+{"task": "add-index", "steps": [
+  {"note": "Remove any leftover (invalid) index of the same name from an earlier failed attempt. Concurrent drop: no lock that blocks the app's reads or writes. No-op today (only orders_pkey exists).",
+   "sql": "DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_idx;"},
+  {"note": "Build the index without blocking traffic. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so INSERTs and SELECTs keep running during the build (~10M rows, 751 MB table). Alone in its own step because it cannot run inside a transaction block.",
+   "sql": "CREATE INDEX CONCURRENTLY orders_customer_id_idx ON orders (customer_id);"},
+  {"note": "Check the index finished valid and ready; fail the plan loudly if not (a failed concurrent build leaves an INVALID index the planner ignores).",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_index WHERE indexrelid = 'public.orders_customer_id_idx'::regclass AND indisvalid AND indisready) THEN RAISE EXCEPTION 'orders_customer_id_idx is not valid'; END IF; END $$;"}
+]}

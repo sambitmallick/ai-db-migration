@@ -1,0 +1,8 @@
+{"task": "add-index", "steps": [
+  {"note": "Remove any leftover (e.g. INVALID, from an interrupted earlier build) index of the same name. CONCURRENTLY so it never blocks the app's reads/writes. No-op today: only orders_pkey exists.",
+   "sql": "DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_id_idx;"},
+  {"note": "Build the index online. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so INSERTs and SELECTs keep running during the build. (customer_id, id) serves GET /customer/C's WHERE customer_id = $1 ORDER BY id DESC LIMIT 10 directly with a backward index scan, no sort. Run as a statement on its own: CONCURRENTLY cannot run inside a transaction block.",
+   "sql": "CREATE INDEX CONCURRENTLY orders_customer_id_id_idx ON orders (customer_id, id);"},
+  {"note": "Verify the index is valid and ready; fail the plan loudly if not.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_index WHERE indexrelid = 'orders_customer_id_id_idx'::regclass AND indisvalid AND indisready) THEN RAISE EXCEPTION 'orders_customer_id_id_idx is not valid'; END IF; END $$;"}
+]}

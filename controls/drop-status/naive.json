@@ -1,0 +1,10 @@
+{
+ "task": "drop-status",
+ "by": "control (naive)",
+ "steps": [
+  {
+   "note": "drop the column, as asked",
+   "sql": "ALTER TABLE orders DROP COLUMN status;"
+  }
+ ]
+}

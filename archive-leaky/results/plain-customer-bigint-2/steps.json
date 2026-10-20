@@ -1,0 +1,146 @@
+[
+ {
+  "note": "Trigger function that keeps the new bigint column equal to customer_id on every insert/update.",
+  "kind": "sql",
+  "start": 1792494916.7608485,
+  "end": 1792494917.1242158,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In one short transaction: add nullable customer_id_new bigint (metadata only, no rewrite), a NOT VALID not-null check, and the sync trigger. The table lock is taken with a 300ms lock_timeout and retried, so app queries never queue behind it for long.",
+  "kind": "sql",
+  "start": 1792494917.1242158,
+  "end": 1792494917.5229926,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1..1,000,000 in 250k-row batches, each its own transaction (the app only inserts new rows, so no row-lock conflicts).",
+  "kind": "sql",
+  "start": 1792494917.5229926,
+  "end": 1792494923.3287032,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1,000,001..2,000,000.",
+  "kind": "sql",
+  "start": 1792494923.3287032,
+  "end": 1792494929.2773023,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,000,001..3,000,000.",
+  "kind": "sql",
+  "start": 1792494929.2773023,
+  "end": 1792494935.1866055,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 3,000,001..4,000,000.",
+  "kind": "sql",
+  "start": 1792494935.1866055,
+  "end": 1792494941.098041,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4,000,001..5,000,000.",
+  "kind": "sql",
+  "start": 1792494941.098041,
+  "end": 1792494946.9364803,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5,000,001..6,000,000.",
+  "kind": "sql",
+  "start": 1792494946.9364803,
+  "end": 1792494953.0804334,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6,000,001..7,000,000.",
+  "kind": "sql",
+  "start": 1792494953.0804334,
+  "end": 1792494959.2549958,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7,000,001..8,000,000.",
+  "kind": "sql",
+  "start": 1792494959.2549958,
+  "end": 1792494965.2944872,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8,000,001..9,000,000.",
+  "kind": "sql",
+  "start": 1792494965.2944872,
+  "end": 1792494971.4979792,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 9,000,001..10,000,000.",
+  "kind": "sql",
+  "start": 1792494971.4979792,
+  "end": 1792494977.6485796,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill rows above 10,000,000 that the app inserted before the trigger existed (rows inserted after it already have the value).",
+  "kind": "sql",
+  "start": 1792494977.6485796,
+  "end": 1792494978.074279,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify every row: customer_id_new must equal customer_id, otherwise the plan stops here. Plain read, takes no blocking lock.",
+  "kind": "sql",
+  "start": 1792494978.074279,
+  "end": 1792494984.0972157,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the not-null check. VALIDATE takes only SHARE UPDATE EXCLUSIVE, so reads and inserts keep running; once valid, SET NOT NULL can skip its table scan.",
+  "kind": "sql",
+  "start": 1792494984.0972157,
+  "end": 1792494987.3275998,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Atomic swap, metadata only, same short-lock-with-retry pattern: SET NOT NULL (proven by the valid check, no scan), drop the check and the trigger, drop the old integer column, rename customer_id_new to customer_id. The app refers to columns by name, so it needs no redeploy.",
+  "kind": "sql",
+  "start": 1792494987.3275998,
+  "end": 1792494987.71342,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the trigger function and refresh planner statistics for the new column.",
+  "kind": "sql",
+  "start": 1792494987.71342,
+  "end": 1792494988.5877247,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Fail unless orders.customer_id is now bigint NOT NULL.",
+  "kind": "sql",
+  "start": 1792494988.5877247,
+  "end": 1792494989.0109653,
+  "ok": true,
+  "output": ""
+ }
+]

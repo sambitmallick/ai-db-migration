@@ -1,0 +1,50 @@
+[
+ {
+  "note": "Metadata-only, one transaction: rename table orders -> orders_base and its column amount -> total (keeps type, NOT NULL, data, pkey, sequence), then put an auto-updatable view named orders in its place that exposes the column both as amount and as total, so old and new app versions both work. View defaults for id/created_at mirror the table's. Lock is taken with a 100 ms lock_timeout and retried, so app queries never queue long behind the ACCESS EXCLUSIVE lock (e.g. behind a slow /customer seq scan).",
+  "kind": "sql",
+  "start": 1792494245.1332438,
+  "end": 1792494245.389489,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the bridge works: view is insertable via both column names (inside a rolled-back transaction, nothing persists).",
+  "kind": "sql",
+  "start": 1792494245.389489,
+  "end": 1792494245.6238635,
+  "ok": true,
+  "output": "10000686|2026-10-20 11:04:05.617398+00\n10000687|2026-10-20 11:04:05.617398+00"
+ },
+ {
+  "note": "Roll the app over to read and write total (works against the view while old pods still use amount).",
+  "kind": "deploy",
+  "start": 1792494245.6238635,
+  "end": 1792494249.1764376,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish their 3 s drain and any in-flight (max 2 s) queries that still use amount.",
+  "kind": "wait",
+  "start": 1792494249.1764376,
+  "end": 1792494264.178297,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Metadata-only, one transaction: drop the bridge view and rename orders_base back to orders. Now orders has total, no amount, and every pod uses total. Same short lock_timeout + retry.",
+  "kind": "sql",
+  "start": 1792494264.178297,
+  "end": 1792494264.4349487,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the end state: orders.total is numeric(10,2) NOT NULL and amount is gone.",
+  "kind": "sql",
+  "start": 1792494264.4349487,
+  "end": 1792494264.718298,
+  "ok": true,
+  "output": ""
+ }
+]

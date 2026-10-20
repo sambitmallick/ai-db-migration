@@ -1,0 +1,58 @@
+{
+ "run": "plain-email-not-null-2",
+ "task": "email-not-null",
+ "mode": "plain",
+ "prompt": "/migrate email-not-null plans/plain-email-not-null-2.json",
+ "seconds": 92,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 7,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\email-not-null\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); select count(*), count(*) filter (where email is null), count(*) filter (where email = ''), min(id), max(id) from orders; select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid='orders'::regclass; selec"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select attnotnull from pg_attribute where attrelid='orders'::regclass and attname='email'; select n_live_tup, n_dead_tup from pg_stat_user_tables where relname='orders';\\\"; kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}'; echo; ls pl"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select attnotnull from pg_attribute where attrelid='orders'::regclass and attname='email'; select n_live_tup, n_dead_tup from pg_stat_user_tables where relname='orders';\\\"\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select * from pg_db_role_setting; select name, setting from pg_settings where name in ('statement_timeout','lock_timeout','deadlock_timeout','autovacuum','idle_in_transaction_session_timeout');\\\"\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-email-not-null-2.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Make the app store '' instead of NULL for guest orders. After the rolling update no writer produces NULL"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01MSc2r4cX5YW6brGxvAukze",
+   "tool_input": {
+    "command": "bash scripts/db-ro.sh \"select attnotnull from pg_attribute where attrelid='orders'::regclass and attname='email'; select n_live_tup, n_dead_tup from pg_stat_user_tables where relname='orders';\"; kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}'; echo; ls plans"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-email-not-null-2.json`. I haven't run it. It makes `orders.email` NOT NULL without blocking the app:\n\n1. **Deploy `GUEST_EMAIL=empty`.** New guest orders store `''`, and once the rolling update finishes nothing writes NULL any more.\n2. **Add `CHECK (email IS NOT NULL) NOT VALID`.** This applies to new rows straight away without scanning the old ones.\n3. **Backfill.** Old guest orders (about 2.5M rows) get `email = ''`, in batches of 50k ids, committing after each batch. The app only inserts and reads, so the updates never get in its way.\n4. **`VACUUM (ANALYZE) orders`.** This clears out the old row versions the backfill leaves behind. Otherwise autovacuum might be running on the table when step 6 needs its lock.\n5. **`VALIDATE CONSTRAINT`.** This scans all 10M rows, but under a lock that doesn't block the app.\n6. **`SET NOT NULL`.** Because the check from step 5 has already passed, Postgres skips the table scan and holds the exclusive lock only for a moment.\n7. **Drop the helper CHECK constraint.**\n\nSteps 2, 6 and 7 each need a brief exclusive lock. They wait at most 200 ms for it and try again (up to 100 times) rather than waiting in line, so app queries are held up far less than their 2 s timeout. Steps that can't run inside a transaction (the backfill loop and VACUUM) each get a step of their own.\n\nThe live database is already in the end state: `email` is NOT NULL, there are no NULL emails and there are 2.5M empty strings. That's probably from an earlier run. So I wrote the plan for the state `db/seed.sql` describes. It fails at step 2 if the database hasn't been reset, because the CHECK constraint can't be added there without one already being in place."
+}

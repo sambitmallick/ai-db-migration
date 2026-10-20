@@ -1,0 +1,10 @@
+{"task": "add-index", "steps": [
+  {"note": "If an INVALID orders_customer_id_idx is left over from an interrupted concurrent build, rename it out of the way (IF NOT EXISTS below would otherwise skip and leave an unusable index). A valid one is left alone.",
+   "sql": "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'orders_customer_id_idx' AND NOT i.indisvalid) THEN ALTER INDEX public.orders_customer_id_idx RENAME TO orders_customer_id_idx_invalid; END IF; END $$;"},
+  {"note": "Drop the leftover invalid index, if any, without blocking reads or writes. Alone in its step: CONCURRENTLY cannot run inside a transaction block.",
+   "sql": "DROP INDEX CONCURRENTLY IF EXISTS public.orders_customer_id_idx_invalid;"},
+  {"note": "Build the index concurrently: only a SHARE UPDATE EXCLUSIVE lock, so the app's inserts and reads (2 s timeout) keep running during the build on 10M rows. Alone in its step for the same reason.",
+   "sql": "CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON public.orders (customer_id);"},
+  {"note": "Verify the index exists and is valid; fail the plan loudly otherwise.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relname = 'orders_customer_id_idx' AND i.indrelid = 'public.orders'::regclass AND i.indisvalid AND i.indisready) THEN RAISE EXCEPTION 'orders_customer_id_idx is missing or invalid'; END IF; END $$;"}
+]}

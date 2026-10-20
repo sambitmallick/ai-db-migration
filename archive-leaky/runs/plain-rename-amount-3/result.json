@@ -1,0 +1,67 @@
+{
+ "run": "plain-rename-amount-3",
+ "task": "rename-amount",
+ "mode": "plain",
+ "prompt": "/migrate rename-amount plans/plain-rename-amount-3.json",
+ "seconds": 101,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 6,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\rename-amount\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"\\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d audit.written\\\" ; bash scripts/db-ro.sh \\\"\\\\d audit.snap\\\"; bash scripts/db-ro.sh \\\"select count(*) from audit.written; select count(*) from audit.snap\\\"; kubectl get deploy shop -o "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d audit.written\\\" ; bash scripts/db-ro.sh \\\"\\\\d audit.snap\\\"; bash scripts/db-ro.sh \\\"select count(*) from audit.written\\\"; bash scripts/db-ro.sh \\\"select count(*) from audit.snap\\\"\", "
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-rename-amount-3.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Metadata-only, one transaction: rename table orders -> orders_base and its column amount -> total (keeps t"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/plain-rename-amount-3.json'); console.log(p.task, p.steps.length)\\\"\", \"description\": \"Check the plan file is valid JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01JRr6xnCZq1CkX6J8U1JAQb",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && bash scripts/db-ro.sh \"\\d audit.written\" ; bash scripts/db-ro.sh \"\\d audit.snap\"; bash scripts/db-ro.sh \"select count(*) from audit.written; select count(*) from audit.snap\"; kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}'",
+    "description": "Inspect audit tables and current deployment env"
+   }
+  },
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01JwscQxdLPTnnTFKxa2UiYw",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/plain-rename-amount-3.json'); console.log(p.task, p.steps.length)\"",
+    "description": "Check the plan file is valid JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-rename-amount-3.json`. It renames the column without copying any rows, so none of the 10M orders get rewritten:\n\n1. **Bridge:** in one short transaction, rename the table `orders` to `orders_base` and its column `amount` to `total`. Type, NOT NULL, data, primary key and sequence all stay as they are. A view named `orders` takes the table's place and shows the column under both names, `amount` and `total`, so pods on the old and new versions keep working side by side. The view uses the table's defaults for `id` and `created_at`.\n2. **Check:** insert through the view once by each column name, inside a transaction that is rolled back.\n3. **Deploy:** set `AMOUNT_READ=total` and `AMOUNT_WRITE=total`.\n4. **Wait 15 s:** gives old pods time to finish their shutdown and any last queries that still use `amount`.\n5. **Remove the bridge:** in one transaction, drop the view and rename `orders_base` back to `orders`.\n6. **Verify:** check that `orders.total` is `numeric(10,2) NOT NULL` and that `amount` is gone. The step fails if not.\n\nSteps 1 and 5 never make the app wait long behind the table lock: each attempt gives up after 100 ms, then pauses briefly and tries again. That matters because a `/customer` query reads the whole table and can hold it for up to 2 s.\n\nNone of it has been run: I couldn't parse the JSON to check it, because shell commands were denied after my database queries. The live database doesn't match `db/seed.sql`. It already has `total` and no `amount`, which looks like what an earlier run left behind. The plan expects the seeded state: if it runs against the database as it is now, step 1 fails right away and nothing changes."
+}

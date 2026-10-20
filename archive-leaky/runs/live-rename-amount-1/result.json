@@ -1,0 +1,47 @@
+{
+ "run": "live-rename-amount-1",
+ "task": "rename-amount",
+ "mode": "live",
+ "prompt": "/migrate rename-amount plans/live-rename-amount-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 158,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 20,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/rename-amount/task.md && ls tasks/rename-amount plans && cat app/server.js && cat k8s/shop.yaml && cat db/seed.sql | head -100 && cat scripts/db-ro.sh\", \"description\": \"Read task, app, k8s, seed, and "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','informati"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls harness scripts experiment controls results tasks; bash scripts/db-ro.sh \\\"\\\\d audit.snap\\\" ; bash scripts/db-ro.sh \\\"\\\\d audit.written\\\"\", \"description\": \"List harness files and audit tables\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select min(id), max(id), pg_size_pretty(pg_total_relation_size('orders')), pg_size_pretty(pg_database_size('shop')) from orders; show statement_timeout; show lock_timeout; select n_tup_i"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"which python python3 node 2>/dev/null; echo $TEMP\", \"description\": \"Check available interpreters\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-rename-amount-1.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Create the trigger function that keeps amount and total identical: on INSERT it fills whichever of the two "
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01P7YJ7qv5DUpsfUFsZPrx6E",
+   "tool_input": {
+    "command": "which python python3 node 2>/dev/null; echo $TEMP",
+    "description": "Check available interpreters"
+   }
+  }
+ ],
+ "answer": "I've written the plan to `plans/live-rename-amount-1.json`. I haven't run it or tested it on a copy of the database. I only checked the live database read-only (10M orders, PostgreSQL 17; no other triggers, views or functions depend on `amount`).\n\nA plain `RENAME COLUMN` would break the running pods straight away, because they still query `amount`. So the plan adds the new column first, moves the app over, and only then removes the old one:\n\n1. **Add `total` and a sync trigger together.** Adding a nullable column doesn't rewrite the table, so it's instant. The trigger keeps `amount` and `total` equal on every insert or update, whichever one the app writes. The table lock waits at most 500 ms per attempt and is retried, so app queries are never held up near their 2 s timeout.\n2. **Copy `amount` into `total` for existing rows.** This runs in batches of 20k rows, each committed separately, with a `VACUUM` every 2M rows so the table doesn't double in size. The app never updates orders, so the batches don't get in its way.\n3. **Check every row.** If any row has `total` different from `amount`, the plan stops here, before the app is touched.\n4. **Make `total` NOT NULL without a long lock.** It adds a check constraint without checking existing rows, checks them in a second step that doesn't block reads or inserts, then sets NOT NULL. Postgres can skip the table scan because of the checked constraint, so that last lock is momentary.\n5. **Deploy the app with `AMOUNT_READ=total` and `AMOUNT_WRITE=total`, then wait 35 s.** During the rolling update, old pods use `amount` and new pods use `total`, and the trigger keeps both filled. The wait lets old pods that are shutting down finish their last requests.\n6. **Check again, then remove the old column.** The trigger and `amount` are dropped in one short transaction, since dropping a column doesn't rewrite the table.\n\nAt the end, `orders.total` is `numeric(10,2) NOT NULL`, `amount` is gone, and the app reads and writes `total`. Two"
+}

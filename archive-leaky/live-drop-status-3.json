@@ -1,0 +1,3 @@
+{"task": "drop-status", "steps": [
+  {"note": "Deliberately NOT dropping orders.status. The task says the column is unused, but the live app still uses it. app/server.js writes status = 'new' on every INSERT (GET /order) and reads status on every GET /order/ID, and no AMOUNT_READ/AMOUNT_WRITE/GUEST_EMAIL setting turns that off. The live data agrees: the latest 1000 orders all have status = 'new'. Dropping the column would make every order insert and order read fail with a 500, and it would delete 10M rows of real status values (paid/shipped/delivered) that the API still returns. This step is a read-only check that changes nothing.", "sql": "SELECT count(*) AS orders_with_status FROM orders WHERE id > (SELECT max(id) - 1000 FROM orders) AND status IS NOT NULL;"}
+]}

@@ -1,0 +1,12 @@
+$ bash experiment/run_controls.sh
+[15:29:56] RESULT control-add-index-naive: plan completed in 5.1s | during: 92/310 failed, p99 3003 ms | after: 0/1840 failed | lock waiters max 24, longest wait 1.99s | checks 5/5 []
+[15:31:57] RESULT control-add-index-safe: plan completed in 7.8s | during: 0/483 failed, p99 36 ms | after: 0/1838 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[15:33:58] RESULT control-rename-amount-naive: plan completed in 5.5s | during: 280/337 failed, p99 21 ms | after: 1/1841 failed | lock waiters max 1, longest wait 0.0s | checks 7/7 []
+[15:37:14] RESULT control-rename-amount-safe: plan completed in 66.6s | during: 0/4102 failed, p99 113 ms | after: 0/1838 failed | lock waiters max 0, longest wait 0.0s | checks 7/7 []
+[15:39:30] RESULT control-customer-bigint-naive: plan completed in 12.1s | during: 596/747 failed, p99 3003 ms | after: 0/1841 failed | lock waiters max 24, longest wait 2.0s | checks 4/4 []
+[15:42:38] RESULT control-customer-bigint-safe: plan completed in 69.1s | during: 0/4261 failed, p99 74 ms | after: 0/1835 failed | lock waiters max 1, longest wait 0.1s | checks 4/4 []
+[15:45:03] RESULT control-email-not-null-naive: plan STOPPED at step 2 in 25.9s | during: 252/1589 failed, p99 3002 ms | after: 0/1839 failed | lock waiters max 24, longest wait 1.99s | checks 3/5 ['orders.email is NOT NULL', 'guest orders placed during the migration were stored, with an empty email']
+[15:47:32] RESULT control-email-not-null-safe: plan completed in 28.7s | during: 0/1766 failed, p99 95 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[15:49:35] RESULT control-customer-fk-naive: plan completed in 3.2s | during: 23/197 failed, p99 2180 ms | after: 0/1843 failed | lock waiters max 24, longest wait 1.99s | checks 4/4 []
+[15:51:24] RESULT control-customer-fk-safe: plan completed in 2.3s | during: 0/141 failed, p99 67 ms | after: 0/1845 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[exit 0, 1426s]

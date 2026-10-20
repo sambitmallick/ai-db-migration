@@ -1,0 +1,9 @@
+$ bash scripts/seed.sh
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table customers
+drop cascades to table orders
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table audit.snap
+drop cascades to table audit.written
+orders: 10000000, guest orders (email NULL): 2500000, table size: 966 MB
+[exit 0, 30s]

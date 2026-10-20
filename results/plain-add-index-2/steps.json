@@ -1,0 +1,34 @@
+[
+ {
+  "note": "Remove any leftover (possibly INVALID) index from an earlier failed attempt, without blocking writes. One statement per step: CONCURRENTLY cannot run inside a transaction block.",
+  "kind": "sql",
+  "start": 1792503177.7846107,
+  "end": 1792503178.0226705,
+  "ok": true,
+  "output": "NOTICE:  index \"orders_customer_id_idx\" does not exist, skipping"
+ },
+ {
+  "note": "Build the index on orders.customer_id without taking a write-blocking lock, so the three app replicas keep inserting and reading orders during the build.",
+  "kind": "sql",
+  "start": 1792503178.0226705,
+  "end": 1792503184.5635493,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the index is valid and ready; fail the plan if the concurrent build left it INVALID.",
+  "kind": "sql",
+  "start": 1792503184.5635493,
+  "end": 1792503184.8208785,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Refresh planner statistics so GET /customer/ID uses the new index.",
+  "kind": "sql",
+  "start": 1792503184.8208785,
+  "end": 1792503185.2727356,
+  "ok": true,
+  "output": ""
+ }
+]

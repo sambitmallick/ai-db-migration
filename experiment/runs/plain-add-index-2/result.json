@@ -1,0 +1,26 @@
+{
+ "run": "plain-add-index-2",
+ "task": "add-index",
+ "mode": "plain",
+ "prompt": "/migrate add-index plans/plain-add-index-2.json",
+ "seconds": 39,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 4,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat tasks/add-index/task.md; ls tasks/add-index plans; cat db/seed.sql | head -100\", \"description\": \"Read task and schema\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"SELECT indexrelid::regclass, indisvalid, indisready, pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid='orders'::regclass;\\\" ; bash scripts/db-ro.sh \\\"SELECT pid, state, wait_event_type, now()-xact_start AS age, left(query,80) FROM pg_stat_activity WHERE d"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-add-index-2.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Remove any leftover (possibly INVALID) index from an earlier failed attempt, without blocking writes. One statemen"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/plain-add-index-2.json`. I haven't run it. Right now `orders` (10M rows) has only its primary key index.\n\n1. **Clear out leftovers:** `DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_idx` removes a half-built index if an earlier attempt failed, so the plan can be run again safely.\n2. **Build the index:** `CREATE INDEX CONCURRENTLY orders_customer_id_idx ON orders (customer_id)`. Built this way, it doesn't block writes, so the three app replicas keep taking and reading orders while it builds. Each of these statements has its own step because Postgres won't run them inside a transaction.\n3. **Check the index:** the plan stops with an error if the index came out invalid, so a failed build can't pass as finished.\n4. **Update statistics:** `ANALYZE orders` refreshes what Postgres knows about the table, so `GET /customer/ID` uses the new index.\n\nNo deploy step is needed because the app's queries stay the same. I indexed only `customer_id`, exactly as the task asks. With about 200 orders per customer, sorting them for the page's `ORDER BY id DESC LIMIT 10` is cheap. If you want to skip that sort too, an index on `(customer_id, id)` would do it."
+}

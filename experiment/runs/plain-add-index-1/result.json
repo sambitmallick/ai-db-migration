@@ -1,0 +1,53 @@
+{
+ "run": "plain-add-index-1",
+ "task": "add-index",
+ "mode": "plain",
+ "prompt": "/migrate add-index plans/plain-add-index-1.json",
+ "seconds": 56,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT indexrelid::regclass, indisvalid, pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid='orders'::regclass; SELECT rolname, rolconfig FROM pg_roles WHERE rolconfig IS NOT NULL;"
+  },
+  {
+   "tool": "Grep",
+   "input": "{\"pattern\": \"psql\", \"path\": \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration\", \"output_mode\": \"content\", \"glob\": \"harness/**\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls k8s && grep -n -i -E \\\"memory|cpu|shared_buffers|image\\\" k8s/*.yaml\", \"description\": \"Check k8s resource limits\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-add-index-1.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Remove any leftover (possibly INVALID) index from an earlier failed attempt, without blocking the app's reads or w"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Grep",
+   "tool_use_id": "toolu_01PgF9kg4HWsYUXjvr3SnmtM",
+   "tool_input": {
+    "pattern": "psql",
+    "path": "D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration",
+    "glob": "harness/**",
+    "output_mode": "content"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-add-index-1.json`. It has three SQL steps and doesn't redeploy the app, because the app's queries stay the same.\n\n1. **Clean up:** drops any half-built index left by an earlier failed attempt, using `DROP INDEX CONCURRENTLY IF EXISTS` so the app isn't blocked.\n2. **Build:** runs `CREATE INDEX CONCURRENTLY orders_customer_id_id_idx ON orders (customer_id, id)`. Building it this way keeps the app's reads and inserts on the 10M-row table (751 MB) working the whole time. The step turns off the statement timeout so a slow build isn't cut off, and raises `maintenance_work_mem` to 128MB, which fits inside the Postgres pod's 1.5Gi memory limit.\n3. **Check:** fails the plan if the index is missing or invalid, since a failed concurrent build leaves an invalid index behind. Then it runs `ANALYZE orders`.\n\nThe index covers `(customer_id, id)` rather than `customer_id` alone. That way the customer page query (`WHERE customer_id = $1 ORDER BY id DESC LIMIT 10`) can read its 10 rows straight from the index without sorting.\n\nOne thing I couldn't check: steps 1 and 2 only work if the runner sends each statement separately within one psql session, which is what \"each statement commits on its own\" suggests. If it sends the whole `sql` string as one query, Postgres treats it as a single transaction and `CONCURRENTLY` fails. In that case the plan stops at step 1 before changing anything. I was denied access to the harness code, so I couldn't confirm which way it works."
+}

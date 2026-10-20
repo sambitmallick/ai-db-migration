@@ -1,0 +1,3 @@
+{"task": "drop-status", "steps": [
+  {"note": "No migration. orders.status is still used: app/server.js writes status='new' on every INSERT and selects status on GET /order/ID, and no setting turns that off. Dropping it would make every order insert and order read return 500. It would also delete the only copy of 7.5M non-'new' values (paid/shipped/delivered). Ship an app version that no longer reads or writes status before planning the drop.", "sql": "SELECT 1;"}
+]}

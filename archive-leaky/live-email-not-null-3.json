@@ -1,0 +1,22 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Make the app store '' instead of NULL for guest orders. The column is still nullable, so old and new pods can run side by side during the rolling update.",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+
+  {"note": "Let terminating old pods finish their in-flight requests (3 s drain + shutdown) so nothing writes NULL any more.",
+   "wait": 15},
+
+  {"note": "Backfill existing guest orders NULL -> '' in small primary-key ranges, committing after each batch: only short row locks, no long transaction, app traffic unaffected. Single DO statement so the in-block COMMITs are allowed.",
+   "sql": "DO $$ DECLARE lo bigint; maxid bigint; step constant bigint := 20000; BEGIN SELECT min(id), max(id) INTO lo, maxid FROM orders; WHILE lo <= maxid LOOP UPDATE orders SET email = '' WHERE id >= lo AND id < lo + step AND email IS NULL; COMMIT; lo := lo + step; PERFORM pg_sleep(0.02); END LOOP; END $$;"},
+
+  {"note": "Add CHECK (email IS NOT NULL) NOT VALID: enforced for new rows from now on, no table scan. Needs only a brief ACCESS EXCLUSIVE lock, taken with a short lock_timeout and retried so app queries never queue behind it for long. Skipped if it already exists.",
+   "sql": "DO $$ BEGIN FOR i IN 1..60 LOOP BEGIN SET LOCAL lock_timeout = '300ms'; IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.orders'::regclass AND conname = 'orders_email_not_null') THEN ALTER TABLE public.orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; END IF; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders to add the check constraint'; END $$;"},
+
+  {"note": "Safety sweep: convert any NULL that slipped in between the backfill and the constraint (e.g. a straggling old pod). Normally updates 0 rows; takes only a ROW EXCLUSIVE lock.",
+   "sql": "UPDATE public.orders SET email = '' WHERE email IS NULL;"},
+
+  {"note": "Validate the constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts.",
+   "sql": "ALTER TABLE public.orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL (Postgres skips the table scan because the valid CHECK proves no NULLs), then drop the now-redundant CHECK. Both in one short transaction with a short lock_timeout and retries.",
+   "sql": "DO $$ BEGIN FOR i IN 1..60 LOOP BEGIN SET LOCAL lock_timeout = '300ms'; ALTER TABLE public.orders ALTER COLUMN email SET NOT NULL; ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_email_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders to set NOT NULL'; END $$;"}
+]}

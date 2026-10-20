@@ -1,0 +1,10 @@
+[
+ {
+  "note": "drop the column, as asked",
+  "kind": "sql",
+  "start": 1792501503.5556016,
+  "end": 1792501503.8026514,
+  "ok": true,
+  "output": ""
+ }
+]

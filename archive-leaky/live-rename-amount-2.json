@@ -1,0 +1,19 @@
+{"task": "rename-amount", "steps": [
+  {"note": "Check the starting state: orders is a table with amount numeric(10,2) NOT NULL and no total yet. Changes nothing; stops the plan if the database is not in the expected state.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'amount' AND NOT attisdropped AND attnotnull AND format_type(atttypid, atttypmod) = 'numeric(10,2)') OR EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'total' AND NOT attisdropped) OR (SELECT relkind FROM pg_class WHERE oid = 'public.orders'::regclass) <> 'r' OR to_regclass('public.orders_base') IS NOT NULL THEN RAISE EXCEPTION 'orders is not in the expected starting state'; END IF; END $$;"},
+
+  {"note": "Metadata-only, in one transaction: rename the column amount -> total, rename the table orders -> orders_base, and put an auto-updatable view named orders in its place that exposes the column under BOTH names (amount and total). Old pods keep reading/inserting amount, new pods can use total, both land in the same column; no rows are rewritten. Short lock_timeout so app queries never queue long behind the lock; retried on lock timeout.",
+   "sql": "SET lock_timeout = '200ms'; DO $$ BEGIN FOR i IN 1..150 LOOP BEGIN ALTER TABLE public.orders RENAME COLUMN amount TO total; ALTER TABLE public.orders RENAME TO orders_base; CREATE VIEW public.orders AS SELECT id, customer_id, total AS amount, status, email, created_at, total FROM public.orders_base; RETURN; EXCEPTION WHEN lock_not_available OR deadlock_detected THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not get the lock on orders'; END $$; SELECT id, amount, total FROM public.orders ORDER BY id DESC LIMIT 1;"},
+
+  {"note": "Roll the app over to the new name: read and write total (served by the view until the swap back).",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total"}},
+
+  {"note": "Let terminated old pods finish draining their in-flight requests (3 s SIGTERM delay + shutdown) before amount disappears.",
+   "wait": 20},
+
+  {"note": "Metadata-only, in one transaction: drop the view and rename orders_base back to orders. orders is again the original table (same rows, same oid, indexes, sequence), with the column total numeric(10,2) NOT NULL and no amount column. Queries waiting on the lock re-resolve the name to the table. Retried on lock timeout.",
+   "sql": "SET lock_timeout = '200ms'; DO $$ BEGIN FOR i IN 1..150 LOOP BEGIN DROP VIEW public.orders; ALTER TABLE public.orders_base RENAME TO orders; RETURN; EXCEPTION WHEN lock_not_available OR deadlock_detected THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not get the lock on orders'; END $$;"},
+
+  {"note": "Verify the end state: orders is a table, total is numeric(10,2) NOT NULL, amount is gone.",
+   "sql": "DO $$ BEGIN IF (SELECT relkind FROM pg_class WHERE oid = 'public.orders'::regclass) <> 'r' OR NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'total' AND NOT attisdropped AND attnotnull AND format_type(atttypid, atttypmod) = 'numeric(10,2)') OR EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'amount' AND NOT attisdropped) THEN RAISE EXCEPTION 'unexpected end state'; END IF; END $$;"}
+]}

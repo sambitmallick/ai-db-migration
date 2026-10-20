@@ -1,0 +1,47 @@
+$ bash experiment/run_ai.sh live 3
+{"run": "live-add-index-1", "seconds": 50, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 0, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[17:20:29] RESULT live-add-index-1: plan completed in 11.3s | during: 0/700 failed, p99 56 ms | after: 0/1838 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "live-add-index-2", "seconds": 69, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 1, "tools": 6}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[17:24:04] RESULT live-add-index-2: plan completed in 13.1s | during: 0/810 failed, p99 64 ms | after: 0/1837 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "live-add-index-3", "seconds": 70, "plan_written": true, "plan_valid": true, "steps": 2, "denials": 0, "tools": 8}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[17:27:35] RESULT live-add-index-3: plan completed in 12.7s | during: 0/782 failed, p99 56 ms | after: 0/1842 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "live-rename-amount-1", "seconds": 158, "plan_written": true, "plan_valid": true, "steps": 20, "denials": 1, "tools": 6}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[17:34:57] RESULT live-rename-amount-1: plan completed in 150.9s | during: 0/9282 failed, p99 34 ms | after: 0/1831 failed | lock waiters max 1, longest wait 0.0s | checks 7/7 []
+{"run": "live-rename-amount-2", "seconds": 132, "plan_written": true, "plan_valid": true, "steps": 6, "denials": 2, "tools": 6}
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[17:39:54] RESULT live-rename-amount-2: plan completed in 25.8s | during: 0/1584 failed, p99 22 ms | after: 0/1835 failed | lock waiters max 1, longest wait 0.0s | checks 7/7 []
+{"run": "live-rename-amount-3", "seconds": 156, "plan_written": true, "plan_valid": true, "steps": 6, "denials": 2, "tools": 9}
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[17:45:05] RESULT live-rename-amount-3: plan completed in 20.6s | during: 0/1263 failed, p99 21 ms | after: 0/1836 failed | lock waiters max 0, longest wait 0.0s | checks 7/7 []
+{"run": "live-customer-bigint-1", "seconds": 280, "plan_written": true, "plan_valid": true, "steps": 27, "denials": 3, "tools": 14}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[17:53:49] RESULT live-customer-bigint-1: plan completed in 112.4s | during: 1/6929 failed, p99 58 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "live-customer-bigint-2", "seconds": 210, "plan_written": true, "plan_valid": true, "steps": 28, "denials": 1, "tools": 10}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 4
+[18:00:06] RESULT live-customer-bigint-2: plan completed in 59.1s | during: 0/3648 failed, p99 68 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "live-customer-bigint-3", "seconds": 266, "plan_written": true, "plan_valid": true, "steps": 53, "denials": 1, "tools": 14}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[18:07:27] RESULT live-customer-bigint-3: plan completed in 70.2s | during: 0/4338 failed, p99 148 ms | after: 0/1845 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "live-email-not-null-1", "seconds": 104, "plan_written": true, "plan_valid": true, "steps": 6, "denials": 1, "tools": 11}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[18:11:55] RESULT live-email-not-null-1: plan completed in 52.0s | during: 0/3205 failed, p99 440 ms | after: 0/1840 failed | lock waiters max 1, longest wait 0.0s | checks 5/5 []
+{"run": "live-email-not-null-2", "seconds": 205, "plan_written": true, "plan_valid": true, "steps": 17, "denials": 2, "tools": 9}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[18:17:58] RESULT live-email-not-null-2: plan completed in 50.2s | during: 0/3095 failed, p99 692 ms | after: 0/1842 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "live-email-not-null-3", "seconds": 103, "plan_written": true, "plan_valid": true, "steps": 7, "denials": 3, "tools": 9}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[18:22:32] RESULT live-email-not-null-3: plan completed in 54.9s | during: 0/3386 failed, p99 56 ms | after: 0/1845 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "live-customer-fk-1", "seconds": 78, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 1, "tools": 9}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[18:25:40] RESULT live-customer-fk-1: plan completed in 2.4s | during: 0/150 failed, p99 35 ms | after: 0/1844 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "live-customer-fk-2", "seconds": 113, "plan_written": true, "plan_valid": true, "steps": 4, "denials": 1, "tools": 11}
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[18:29:20] RESULT live-customer-fk-2: plan completed in 3.8s | during: 0/235 failed, p99 12 ms | after: 0/1845 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "live-customer-fk-3", "seconds": 90, "plan_written": true, "plan_valid": true, "steps": 4, "denials": 1, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[18:32:43] RESULT live-customer-fk-3: plan completed in 4.3s | during: 0/264 failed, p99 251 ms | after: 0/1844 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[exit 0, 4528s]

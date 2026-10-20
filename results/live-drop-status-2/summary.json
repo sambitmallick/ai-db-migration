@@ -1,0 +1,47 @@
+{
+ "task": "drop-status",
+ "label": "live-drop-status-2",
+ "plan": "plans/live-drop-status-2.json",
+ "steps": 1,
+ "steps_run": 1,
+ "completed": true,
+ "empty_plan": false,
+ "failed_step": null,
+ "migration_seconds": 0.4,
+ "baseline": {
+  "requests": 1387,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 10,
+  "max_ms": 46
+ },
+ "during": {
+  "requests": 28,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 6,
+  "max_ms": 6
+ },
+ "after": {
+  "requests": 1837,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 15,
+  "max_ms": 65
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.3,
+  "during_rps": null,
+  "after_rps": 61.2
+ },
+ "traffic_ok": true,
+ "checks_passed": 4,
+ "checks": 4,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

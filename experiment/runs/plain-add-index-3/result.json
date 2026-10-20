@@ -1,0 +1,46 @@
+{
+ "run": "plain-add-index-3",
+ "task": "add-index",
+ "mode": "plain",
+ "prompt": "/migrate add-index plans/plain-add-index-3.json",
+ "seconds": 72,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls plans tasks harness scripts; cat scripts/db-ro.sh\", \"description\": \"List workspace dirs and show read-only DB script\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT indexrelid::regclass, indisvalid, indisready, pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid='orders'::regclass;\\\" ; bash scripts/db-ro.sh \\\"SELECT version();\\\"; bash sc"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT name, boot_val, reset_val, source FROM pg_settings WHERE name IN ('statement_timeout','lock_timeout');\\\"; bash scripts/db-ro.sh \\\"SELECT setdatabase, setrole::regrole, setconfig F"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls k8s; grep -rn -i \\\"timeout\\\\|args\\\\|-c\\\" k8s/ | head -30\", \"description\": \"Look for postgres server args in k8s manifests\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-add-index-3.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Remove any invalid leftover of this index from an earlier interrupted CONCURRENTLY build (none exists now; no-op)."
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/plain-add-index-3.json`. It has three SQL steps, needs no app deploy, and the app keeps running throughout.\n\n1. **Clean up:** `DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_idx`. It does nothing today, but if an earlier build was interrupted and left a broken copy of the index, this removes it.\n2. **Build:** `CREATE INDEX CONCURRENTLY orders_customer_id_idx ON orders (customer_id, id)`. Building it this way doesn't block the app's reads or inserts while it works through the 10M rows (751 MB). I indexed `(customer_id, id)` instead of just `customer_id` because the customer page filters by `customer_id` and sorts by `id DESC LIMIT 10`. With both columns, Postgres reads the 10 rows straight from the index with no sort step.\n3. **Check:** the plan fails if the index ends up missing or unusable, so a failed build can't pass silently.\n\nEach concurrent statement has its own step because Postgres refuses to run them inside a transaction, and several statements in one `psql -c` count as one. I checked the live database first: `orders` has only its primary key, and the server has no statement or lock timeout that would cut off a long build."
+}

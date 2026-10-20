@@ -1,0 +1,43 @@
+{
+ "run": "plain-customer-fk-2",
+ "task": "customer-fk",
+ "mode": "plain",
+ "prompt": "/migrate customer-fk plans/plain-customer-fk-2.json",
+ "seconds": 71,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 4,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\"; cat tasks/customer-fk/task.md; echo ----; cat db/seed.sql; echo ----; cat app/server.js; echo ----; cat k8s/shop.yaml; ls plans tasks\", \"description\": \"Read task, schema, app, and deployment\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\"; cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"SELECT count(*), max(id) FROM customers; SELECT conname, contype, convalidated, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid IN ('orders'::regclass,'cu"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\"; ls -R harness controls experiment scripts results | head -50; grep -rn \\\"customer\\\" harness scripts | head -30\", \"description\": \"Look at harness and load generator\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-fk-2.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Pre-check: stop before changing anything if any order points at a missing customer (seed data has none). Read-"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\"; node -e \\\"const p=require('./plans/plain-customer-fk-2.json'); console.log(p.task, p.steps.length)\\\"\", \"description\": \"Validate plan JSON parses\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01MzDKgbB9UGoGcUUet6eMSM",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\"; node -e \"const p=require('./plans/plain-customer-fk-2.json'); console.log(p.task, p.steps.length)\"",
+    "description": "Validate plan JSON parses"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-customer-fk-2.json`. I didn't run it, and I couldn't check that the JSON parses because the parse command was blocked by permissions. I checked it by eye instead.\n\nThe plan has four steps, and the app keeps running throughout:\n\n1. **Check the data first.** It counts orders whose `customer_id` doesn't match any customer, and stops before changing anything if there are any. The seed data has none.\n2. **Add the foreign key without checking old rows yet** (`NOT VALID`). This takes milliseconds and only holds the lock that pauses inserts briefly. It gives up waiting for the lock after 300 ms and retries up to 50 times, so app inserts never queue behind it for long. From this point, every new order is checked.\n3. **Check the existing 10 million orders** (`VALIDATE CONSTRAINT`). The lock this takes doesn't block the app's reads or inserts, and timeouts are turned off so the long scan can finish.\n4. **Confirm the result.** The plan fails unless `orders_customer_id_fkey` exists, points at `customers(id)` and is marked as checked.\n\nNo app deploys are needed, because the app's SQL doesn't change.\n\nThe live database already has a fully checked `orders_customer_id_fkey`, probably left from an earlier run. The schema file says the database is reset before every migration, but if it isn't, step 2 skips and step 3 does nothing."
+}

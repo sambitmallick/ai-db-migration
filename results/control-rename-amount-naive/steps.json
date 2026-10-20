@@ -1,0 +1,18 @@
+[
+ {
+  "note": "rename the column",
+  "kind": "sql",
+  "start": 1792490590.9369934,
+  "end": 1792490591.3109312,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "roll out the app on the new name",
+  "kind": "deploy",
+  "start": 1792490591.3109312,
+  "end": 1792490596.3883405,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ }
+]

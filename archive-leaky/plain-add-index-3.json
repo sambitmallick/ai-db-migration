@@ -1,0 +1,8 @@
+{"task": "add-index", "steps": [
+  {"note": "If an earlier interrupted CREATE INDEX CONCURRENTLY left an INVALID orders_customer_id_idx behind, drop it (IF NOT EXISTS would otherwise skip it). Short lock_timeout so the brief lock can never queue up app traffic.",
+   "sql": "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_index WHERE indexrelid = to_regclass('public.orders_customer_id_idx') AND NOT indisvalid) THEN PERFORM set_config('lock_timeout', '1s', true); DROP INDEX public.orders_customer_id_idx; END IF; END $$;"},
+  {"note": "Build the index without blocking the app: CONCURRENTLY only takes SHARE UPDATE EXCLUSIVE, so inserts and reads on orders keep running during the build of the 10M-row index. No statement timeout for the long build.",
+   "sql": "SET statement_timeout = 0; CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON public.orders (customer_id);"},
+  {"note": "Verify the index exists, is on customer_id and is valid; fail the plan otherwise.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0] WHERE i.indexrelid = to_regclass('public.orders_customer_id_idx') AND i.indrelid = 'public.orders'::regclass AND a.attname = 'customer_id' AND i.indisvalid AND i.indisready) THEN RAISE EXCEPTION 'orders_customer_id_idx missing or invalid'; END IF; END $$;"}
+]}

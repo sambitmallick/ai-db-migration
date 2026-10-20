@@ -1,0 +1,43 @@
+{
+ "run": "plain-email-not-null-1",
+ "task": "email-not-null",
+ "mode": "plain",
+ "prompt": "/migrate email-not-null plans/plain-email-not-null-1.json",
+ "seconds": 73,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 8,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/email-not-null/task.md && ls tasks/email-not-null plans && cat db/seed.sql && cat app/server.js && cat k8s/shop.yaml\", \"description\": \"Read task, schema, app, and k8s manifest\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); \\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select count(*) filter (where email is null), count(*) filter (where email=''), min(id), max(id) from order"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select version()\\\"; bash scripts/db-ro.sh \\\"select indexdef from pg_indexes where tablename='orders'\\\"; bash scripts/db-ro.sh \\\"select name, setting from pg_settings where name in ('lock"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-email-not-null-1.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Roll out the app so guest orders store '' instead of NULL. No schema change yet, so old and new pods bot"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/plain-email-not-null-1.json'); console.log(p.steps.length,'steps ok')\\\"\", \"description\": \"Check plan JSON parses\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01AFeiBqwoiPMPivmvHGoAsN",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/plain-email-not-null-1.json'); console.log(p.steps.length,'steps ok')\"",
+    "description": "Check plan JSON parses"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-email-not-null-1.json`. I couldn't confirm the file parses as JSON, because permission to run that check was denied; it was written by hand. Nothing in it has been run yet.\n\nThe live database has about 2.5M orders with a NULL email out of roughly 10M, and the app is taking traffic. The plan makes `orders.email` NOT NULL without blocking reads or writes for long:\n\n1. **Deploy `GUEST_EMAIL=empty`**, then wait 10s. New guest orders store `''`, and old pods have time to finish their last requests. The schema doesn't change yet, so old and new pods both work during the rollout.\n2. **Add a `CHECK (email IS NOT NULL) NOT VALID` constraint.** Postgres rejects new NULLs from then on but doesn't scan the existing rows.\n3. **Backfill the old NULLs to `''`** in batches of 50,000 ids, committing after each batch so transactions stay short. A check step after it stops the plan if any NULL is left.\n4. **Validate the constraint.** This scans the whole table, but its lock doesn't block reads or inserts.\n5. **`SET NOT NULL`.** Postgres 17 uses the validated constraint to skip the table scan, so the lock only lasts a moment.\n6. **Drop the extra CHECK constraint.** This is a separate step so the constraint still exists when step 5 runs.\n\nSteps 2, 5 and 6 each need a brief lock that blocks the whole table. Each one gives up after waiting 300ms and retries, up to 100 times, so it never holds up app queries for long."
+}

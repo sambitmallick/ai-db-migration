@@ -1,0 +1,42 @@
+{
+ "run": "live-add-index-1",
+ "task": "add-index",
+ "mode": "live",
+ "prompt": "/migrate add-index plans/live-add-index-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 64,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"SELECT indexrelid::regclass, indisvalid, indisready, pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid='orders'::regclass; SELECT version(); SHOW lock_timeout; SHOW statement_timeout; SELECT count(*) FROM pg_stat_activity WHERE state <> 'idle';\\\"; ls plans"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls harness scripts plans; grep -rn \\\"psql\\\" harness scripts | head -30\", \"description\": \"Check how harness runs SQL steps\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"SELECT r.rolname, s.setconfig FROM pg_roles r LEFT JOIN pg_db_role_setting s ON s.setrole=r.oid WHERE r.rolname !~ '^pg_'; SELECT name, setting, source FROM pg_settings WHERE name IN ('statement_timeout','lock_timeout','maintenance_work_mem','max_parallel_mainten"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-add-index-1.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Remove any leftover (invalid) index of the same name from an earlier failed attempt. Concurrent drop: no lock that "
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I've written the plan to `plans/live-add-index-1.json`. I haven't run it.\n\nIt has three steps:\n\n1. **Clear out a leftover index.** `DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_idx` removes a half-built copy if an earlier attempt failed. Right now `orders` only has its primary key, so this step does nothing today.\n2. **Build the index.** `CREATE INDEX CONCURRENTLY orders_customer_id_idx ON orders (customer_id)` doesn't block inserts or reads, so the three app replicas keep serving at 60 req/s while it builds across the 10M rows (751 MB). It has to be alone in its own step because it can't run inside a transaction.\n3. **Check the result.** This step stops the plan with an error if the index didn't finish valid. When a concurrent build fails, it leaves an index that queries ignore, and without this check nobody would notice.\n\nThe plan doesn't change any data, deploy the app or change its settings, so `GET /customer/ID` simply starts using the new index.\n\nOne assumption: the plan's SQL needs to run as a user with no statement timeout. On the live database `postgres` has none; the 10 s limit only applies to the read-only `agent_ro` login."
+}

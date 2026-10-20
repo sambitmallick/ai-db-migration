@@ -1,0 +1,6 @@
+$ bash experiment/run_sessions.sh
+[22:45:49] RESULT session-rename: plan completed in 19.8s | during: 0/1215 failed, p99 6 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 7/7 []
+[22:48:24] RESULT session-email: plan completed in 42.1s | during: 0/2595 failed, p99 1053 ms | after: 0/1838 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[22:50:24] RESULT session-drop: plan completed in 0.0s | during: 0/0 failed, p99 0 ms | after: 0/1840 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[22:52:37] RESULT control-customer-bigint-naive-wrapped: plan completed in 13.9s | during: 711/854 failed, p99 3003 ms | after: 0/1840 failed | lock waiters max 24, longest wait 1.99s | checks 4/4 []
+[exit 0, 542s]

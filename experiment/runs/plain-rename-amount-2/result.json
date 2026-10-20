@@ -1,0 +1,59 @@
+{
+ "run": "plain-rename-amount-2",
+ "task": "rename-amount",
+ "mode": "plain",
+ "prompt": "/migrate rename-amount plans/plain-rename-amount-2.json",
+ "seconds": 170,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 9,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\rename-amount\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version(); \\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select count(*), min(id), max(id) from orders; select tgname from pg_trigger where tgrelid='orders'::regclass; select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid='orders'::regclass;"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version(); select column_name, data_type, numeric_precision, numeric_scale, is_nullable from information_schema.columns where table_name='orders' order by ordinal_position; select indexdef from pg_indexes where tablename='orders'; select n.nspname, p.prona"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls -la plans; which python python3 node\", \"description\": \"Check plans directory and available interpreters\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"python -I - <<'PY'\\nimport json\\n\\ndef retry(body, attempts=120):\\n    # Take the brief ACCESS EXCLUSIVE lock with a short lock_timeout so app queries never queue behind us for long;\\n    # retry on timeout, cancelling any autovacuum on orders that would otherwise hold us off.\\n    retu"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-rename-amount-2.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Expand: add nullable orders.total (instant, no rewrite), a trigger that keeps amount and total in sync bot"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01QmLhtKRnUTs3Aevyrgn4n1",
+   "tool_input": {
+    "command": "python -I - <<'PY'\nimport json\n\ndef retry(body, attempts=120):\n    # Take the brief ACCESS EXCLUSIVE lock with a short lock_timeout so app queries never queue behind us for long;\n    # retry on timeout, cancelling any autovacuum on orders that would otherwise hold us off.\n    return (\"DO $$ DECLARE i int := 0; BEGIN LOOP BEGIN \"\n            \"PERFORM set_config('lock_timeout', '300ms', true); \"\n            + body +\n            \" EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; \"\n            f\"IF i >= {attempts} THEN RAISE; END IF; \"\n            \"PERFORM pg_cancel_backend(pid) FROM pg_stat_activity WHERE backend_type = 'autovacuum worker' AND query ILIKE '%orders%'; \"\n            \"PERFORM pg_sleep(0.5); END; END LOOP; END $$;\")\n\nsync_fn = (\n    \"CREATE FUNCTION orders_sync_total() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN \"\n    \"IF TG_OP = 'INSERT' THEN \"\n    \"IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; \"\n    \"ELSE \"\n    \"IF NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; \"\n    \"ELSIF NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; END IF; \"\n    \"END IF; RETURN NEW; END $f$;\"\n)\n\nexpand = retry(\n    \"ALTER TABLE orders ADD COLUMN total numeric(10,2); \"\n    + sync_fn + \" \"\n    \"CREATE TRIGGER orders_sync_total BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_total(); \"\n    \"ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID;\"\n)\n\nbatch = 100_000\nbackfill = [\"SET statement_timeout = 0;\"]\nfor lo in range(1, 10_000_001, batch):\n    backfill.append(f\"UPDATE orders SET total = amount WHERE id BETWEEN {lo} AND {lo + batch - 1} AND total IS NULL;\")\nbackfill.append(\"UPDATE orders SET total = amount WHERE total IS NULL;\")\n\nset_not_null = retry(\n    \"ALTER TABLE orders ALTER COLUMN total SET NOT NULL; \"\n    \"ALTER TABLE orders DROP CONSTRAINT orders_total_not_null;\"\n)\n\ncontract = retry(\n    \"DROP TRIGGER orders_sync_total ON orders; \"\n    \"ALTER TABLE orders DROP COLUMN amount; \"\n    \"DROP FUNCTION orders_sync_total();\"\n)\n\nverify = (\"DO $$ BEGIN \"\n          \"IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'amount') \"\n          \"THEN RAISE EXCEPTION 'orders.amount still exists'; END IF; \"\n          \"IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'total' \"\n          \"AND data_type = 'numeric' AND numeric_precision = 10 AND numeric_scale = 2 AND is_nullable = 'NO') \"\n          \"THEN RAISE EXCEPTION 'orders.total is not numeric(10,2) NOT NULL'; END IF; \"\n          \"END $$;\")\n\nplan = {\"task\": \"rename-amount\", \"steps\": [\n    {\"note\": \"Expand: add nullable orders.total (instant), a trigger that keeps amount and total in sync both ways on every insert/update (so old pods writing amount and new pods writing total both produce complete rows), and a NOT VALID check total IS NOT NULL. Brief lock, taken with a 300ms lock_timeout and retried.\",\n     \"sql\": expand},\n    {\"note\": \"Backfill total = amount for the existing 10M rows in 100k-row batches by primary key, each its own short transaction; then a catch-all for any row outside the ranges.\",\n     \"sql\": \" \".join(backfill)},\n    {\"note\": \"Vacuum/analyze after rewriting every row, so autovacuum doesn't start later and hold off the lock-taking steps.\",\n     \"sql\": \"VACUUM (ANALYZE) orders;\"},\n    {\"note\": \"Validate the check constraint: full scan under SHARE UPDATE EXCLUSIVE, which doesn't block the app's reads or inserts.\",\n     \"sql\": \"SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;\"},\n    {\"note\": \"Make total NOT NULL. The validated check lets Postgres skip the table scan, so the ACCESS EXCLUSIVE lock is momentary; then drop the now-redundant check.\",\n     \"sql\": set_not_null},\n    {\"note\": \"Switch the app to total for reads and writes. During the rolling update old pods still write amount and read amount; the trigger fills the other column, so every row stays complete for both versions.\",\n     \"deploy\": {\"AMOUNT_READ\": \"total\", \"AMOUNT_WRITE\": \"total\"}},\n    {\"note\": \"Let terminating old pods finish in-flight requests (3s drain + request time) before amount disappears.\",\n     \"wait\": 10},\n    {\"note\": \"Contract: drop the sync trigger, the amount column (metadata-only) and the trigger function, in one transaction with the same lock-timeout retry.\",\n     \"sql\": contract},\n    {\"note\": \"Verify the end state: amount gone, total numeric(10,2) NOT NULL.\",\n     \"sql\": verify},\n]}\nwith open(\"plans/plain-rename-amount-2.json\", \"w\", newline=\"\\n\") as f:\n    json.dump(plan, f, indent=2)\n    f.write(\"\\n\")\nprint(len(backfill))\nPY\nnode -e \"const p=require('./plans/plain-rename-amount-2.json'); console.log(p.steps.map(s=>Object.keys(s).join(',')).join('\\n')); console.log(p.steps[0].sql)\"",
+    "description": "Generate the migration plan JSON file"
+   }
+  }
+ ],
+ "answer": "The plan is in `plans/plain-rename-amount-2.json`. I haven't checked that it parses as JSON, because Bash was denied, so that's worth a quick check before it runs. It uses the expand/contract approach, so the app keeps working the whole time:\n\n1. **Expand:** adds a nullable `total numeric(10,2)` column, which is instant. It also adds a trigger that copies the value between `amount` and `total` in both directions on every insert or update, and a `CHECK (total IS NOT NULL) NOT VALID`. It takes a short-lived lock with a 300ms `lock_timeout` and retries if it can't get it, so app queries never wait long behind it.\n2. **Backfill:** copies `total = amount` for the 10M rows in 40 batches of 250k by id, each committing on its own, then runs one last update for any rows still empty.\n3. **Clean up:** runs `VACUUM (ANALYZE)` so autovacuum doesn't start later and block the lock-taking steps.\n4. **Validate:** checks the constraint against the whole table without blocking the app's reads or inserts.\n5. **`SET NOT NULL`:** the validated check lets Postgres skip the table scan, so the lock is momentary (same retry). Then it drops the check, which is no longer needed.\n6. **Deploy** `AMOUNT_READ=total` and `AMOUNT_WRITE=total`. While the rollout is in progress, old pods use `amount` and new pods use `total`, and the trigger keeps both columns filled.\n7. **Wait 10s** so old pods that are shutting down can finish their requests.\n8. **Contract:** drops the trigger, the `amount` column (no table rewrite) and the trigger function in one transaction, using the same lock retry.\n9. **Verify:** fails if `amount` still exists or if `total` isn't `numeric(10,2) NOT NULL`."
+}

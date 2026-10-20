@@ -1,0 +1,46 @@
+{
+ "task": "customer-bigint",
+ "label": "plain-customer-bigint-3",
+ "plan": "plans/plain-customer-bigint-3.json",
+ "steps": 20,
+ "steps_run": 20,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 121.5,
+ "baseline": {
+  "requests": 1385,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 18,
+  "max_ms": 70
+ },
+ "during": {
+  "requests": 7485,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 5,
+  "p99_ms": 206,
+  "max_ms": 621
+ },
+ "after": {
+  "requests": 1839,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 6,
+  "max_ms": 16
+ },
+ "max_sessions_waiting_on_lock": 14,
+ "longest_lock_wait_s": 54.98,
+ "traffic": {
+  "baseline_rps": 61.3,
+  "during_rps": 61.6,
+  "after_rps": 61.3
+ },
+ "traffic_ok": true,
+ "checks_passed": 4,
+ "checks": 4,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

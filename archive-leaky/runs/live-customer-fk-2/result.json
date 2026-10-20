@@ -1,0 +1,67 @@
+{
+ "run": "live-customer-fk-2",
+ "task": "customer-fk",
+ "mode": "live",
+ "prompt": "/migrate customer-fk plans/live-customer-fk-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 113,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 4,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-fk\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Glob",
+   "input": "{\"pattern\": \"plans/**\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; ls harness k8s scripts experiment controls tasks; cat k8s/shop.yaml\", \"description\": \"Inspect helper scripts and deployment\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"\\\\d customers\\\"; bash scripts/db-ro.sh \\\"select count(*), max(id) from customers; select min(customer_id), max(customer_id) from orders; select ver"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select conname, convalidated, pg_get_constraintdef(oid), confupdtype, confdeltype, condeferrable from pg_constraint where conrelid='orders'::regclass or confrelid='orders'::regclass; sel"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select xact_commit, xact_rollback, stats_reset from pg_stat_database where datname='shop'; select r.rolname, d.datname, s.setconfig from pg_db_role_setting s left join pg_roles r on r.oi"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-fk-2.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Pre-check, read-only: if the FK is not already in place and validated, stop before touching anything when order"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/live-customer-fk-2.json'); console.log(p.steps.length)\\\" && for i in 0 3; do bash scripts/db-ro.sh \\\"$(node -e \\\"console.log(require('./plans/live-customer-fk-2.json').steps[$"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"DO \\\\$\\\\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.orders'::regclass AND contype = 'f' AND convalidated AND pg_get_constraintdef(oid) = 'FOREIGN KEY (cus"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01UYz1s72rEX7Z7BKwHaezQG",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/live-customer-fk-2.json'); console.log(p.steps.length)\" && for i in 0 3; do bash scripts/db-ro.sh \"$(node -e \"console.log(require('./plans/live-customer-fk-2.json').steps[$i].sql)\")\"; done",
+    "description": "Validate JSON and dry-run read-only steps"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-fk-2.json`. The live database already has this foreign key, and it's already validated, so run against it now the plan changes nothing. It does the full migration only on a database where the key is missing, like a fresh `db/seed.sql`.\n\nWhat I found in the live database: `orders_customer_id_fkey` exists and is validated, and no order points to a missing customer. All 2,614 orders inserted since the seed went in without errors, which suggests the live traffic only sends real customer ids.\n\nThe plan has four steps, and each one first checks the current state, so running it twice is safe:\n\n1. **Pre-check (read-only):** if the key isn't already in place, it counts orders that point to a missing customer. If there are any, the plan stops before changing anything, because the only fix would be to change or delete data.\n2. **Add the key without checking existing rows (`NOT VALID`):** this is instant and applies to new orders from then on. It needs a brief lock on `orders` and `customers`, so it gives up after 300 ms and tries again, up to 60 times. App queries never wait long enough to hit their 2-second timeout.\n3. **Check the existing 10M rows (`VALIDATE CONSTRAINT`):** this uses a weaker lock that lets reads and inserts carry on while it scans. It has no time limit.\n4. **Verify:** the plan fails unless a validated key from `orders(customer_id)` to `customers(id)` exists.\n\nTesting was limited. I ran the verify step against the live database and it passed. My attempt to dry-run the other steps and parse the JSON was blocked by permissions, so steps 1\u20133 haven't been run and the file hasn't been machine-checked.\n\nThere is no index on `orders.customer_id`. Deleting a customer or changing a customer's id would therefore scan all 10M orders, and `/customer/C` is already slow for the same reason. The app does neither of those writes, so I left the index out as beyond this task. It's worth a separate migration (`CREATE INDEX CONCURRENTLY`"
+}

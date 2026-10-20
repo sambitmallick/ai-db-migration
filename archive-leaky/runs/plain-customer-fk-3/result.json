@@ -1,0 +1,43 @@
+{
+ "run": "plain-customer-fk-3",
+ "task": "customer-fk",
+ "mode": "plain",
+ "prompt": "/migrate customer-fk plans/plain-customer-fk-3.json",
+ "seconds": 86,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/customer-fk/task.md && ls tasks/customer-fk plans && cat db/seed.sql && cat app/server.js && cat k8s/shop.yaml && cat scripts/db-ro.sh\", \"description\": \"Read task, schema, app, and deploy config\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\nSELECT conname, conrelid::regclass, contype, convalidated, pg_get_constraintdef(oid) FROM pg_constraint WHERE connamespace='public'::regnamespace;\\nSELECT indexrelid::regclass, pg_get_"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\nSELECT conname, conrelid::regclass::text, confrelid::oid, confrelid::regclass::text, (SELECT nspname FROM pg_namespace n JOIN pg_class c ON c.relnamespace=n.oid WHERE c.oid=confrelid) "
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-fk-3.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the FK as NOT VALID (skipped if an FK orders.customer_id -> customers.id already exists). Only needs a bri"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/plain-customer-fk-3.json');console.log(p.task,p.steps.length)\\\"\", \"description\": \"Check the plan file is valid JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01D5JR9Aazw4uYvtEeP6VmCa",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/plain-customer-fk-3.json');console.log(p.task,p.steps.length)\"",
+    "description": "Check the plan file is valid JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-customer-fk-3.json`. I couldn't parse the file to confirm it's valid JSON because that command was blocked, so I only checked it by eye: the SQL contains no double quotes or backslashes that would need escaping.\n\n**The live database already has this foreign key.** `orders_customer_id_fkey` exists, is validated and enforced, and no order points to a missing customer. `seed.sql` doesn't create it, so an earlier run probably added it. The plan therefore works on both a freshly seeded database and the current one.\n\nWhat the plan does:\n1. **Adds the key as `NOT VALID`**, unless a key from `orders.customer_id` to `customers.id` already exists. This only checks new rows, so it doesn't scan the table, and it needs just a brief lock. A 300ms lock timeout stops it from holding up app inserts, which give up after 2s. If it can't get the lock, it tries again up to 30 times, one second apart, without holding any lock in between.\n2. **Validates the existing 10M rows** with `VALIDATE CONSTRAINT`. Reads and inserts keep running during the scan. If the key is already validated, this does nothing. If any order points to a missing customer, the step fails and the plan stops; it never deletes data.\n3. **Checks the result:** the plan fails unless a validated key exists.\n\nThe app needs no deploy. Once the key exists, an order for a customer that doesn't exist gets a 500 error, which is what the task asks for. `orders.customer_id` has no index, so deleting a customer means scanning all of `orders`. The app never deletes customers, so I left the index out."
+}

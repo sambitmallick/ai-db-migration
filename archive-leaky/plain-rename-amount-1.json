@@ -1,0 +1,28 @@
+{"task": "rename-amount", "steps": [
+  {"note": "Create the sync trigger function: on INSERT fill whichever of amount/total is missing from the other; on UPDATE copy whichever one changed to the other. No table lock needed.",
+   "sql": "CREATE OR REPLACE FUNCTION public.orders_sync_amount_total() RETURNS trigger LANGUAGE plpgsql AS $fn$ BEGIN IF TG_OP = 'INSERT' THEN IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; ELSE IF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; END IF; END IF; RETURN NEW; END $fn$;"},
+
+  {"note": "In one short transaction: add nullable column total (metadata only, no rewrite), attach the sync trigger, and add a NOT VALID check (total IS NOT NULL) so new rows are already enforced. Takes the table lock with a 200 ms lock_timeout and retries, so app queries never queue behind it for long.",
+   "sql": "DO $do$ BEGIN PERFORM set_config('lock_timeout', '200ms', true); FOR i IN 1..150 LOOP BEGIN ALTER TABLE public.orders ADD COLUMN total numeric(10,2); CREATE TRIGGER orders_sync_amount_total BEFORE INSERT OR UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.orders_sync_amount_total(); ALTER TABLE public.orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not lock orders to add column total'; END $do$;"},
+
+  {"note": "Backfill total = amount for existing rows in batches of 20,000 ids, committing after each batch (short row locks, no long transaction). New rows are already filled by the trigger.",
+   "sql": "DO $do$ DECLARE lo bigint; hi bigint; BEGIN SELECT min(id), max(id) INTO lo, hi FROM public.orders; WHILE lo <= hi LOOP UPDATE public.orders SET total = amount WHERE id >= lo AND id < lo + 20000 AND total IS NULL; COMMIT; lo := lo + 20000; END LOOP; END $do$;"},
+
+  {"note": "Safety net: fill any row still missing total (should be none).",
+   "sql": "UPDATE public.orders SET total = amount WHERE total IS NULL;"},
+
+  {"note": "Validate the check constraint. Scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or writes.",
+   "sql": "ALTER TABLE public.orders VALIDATE CONSTRAINT orders_total_not_null;"},
+
+  {"note": "Make total NOT NULL. The validated check lets Postgres skip the full-table scan, so the exclusive lock is momentary; then drop the now-redundant check. Lock taken with lock_timeout + retry.",
+   "sql": "DO $do$ BEGIN PERFORM set_config('lock_timeout', '200ms', true); FOR i IN 1..150 LOOP BEGIN ALTER TABLE public.orders ALTER COLUMN total SET NOT NULL; ALTER TABLE public.orders DROP CONSTRAINT orders_total_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not lock orders to set total NOT NULL'; END $do$;"},
+
+  {"note": "Switch the app to read and write total. During the rolling update old pods write amount and new pods write total; the trigger keeps both columns identical, so every pod reads correct values.",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total"}},
+
+  {"note": "Let terminating old pods finish their in-flight requests (3 s drain + up to 2 s statement timeout) before amount disappears.",
+   "wait": 20},
+
+  {"note": "In one short transaction: drop the sync trigger and the amount column (metadata only, no rewrite), with lock_timeout + retry. Then drop the trigger function.",
+   "sql": "DO $do$ BEGIN PERFORM set_config('lock_timeout', '200ms', true); FOR i IN 1..150 LOOP BEGIN DROP TRIGGER orders_sync_amount_total ON public.orders; ALTER TABLE public.orders DROP COLUMN amount; DROP FUNCTION public.orders_sync_amount_total(); RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not lock orders to drop amount'; END $do$;"}
+]}

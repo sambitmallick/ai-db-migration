@@ -1,0 +1,46 @@
+{
+ "task": "add-index",
+ "label": "harness-check-safe",
+ "plan": "controls/add-index/safe.json",
+ "steps": 1,
+ "steps_run": 1,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 6.2,
+ "baseline": {
+  "requests": 1353,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 35,
+  "max_ms": 169
+ },
+ "during": {
+  "requests": 382,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 46,
+  "max_ms": 85
+ },
+ "after": {
+  "requests": 1841,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 5,
+  "max_ms": 56
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.4,
+  "during_rps": 61.7,
+  "after_rps": 61.4
+ },
+ "traffic_ok": true,
+ "checks_passed": 5,
+ "checks": 5,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

@@ -1,0 +1,34 @@
+{
+ "run": "plain-add-index-3",
+ "task": "add-index",
+ "mode": "plain",
+ "prompt": "/migrate add-index plans/plain-add-index-3.json",
+ "seconds": 38,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"SELECT indexrelid::regclass, indisvalid, indisready, pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid='orders'::regclass; SELECT count(*) FROM pg_stat_activity WHERE state <> 'idle'; SELECT version();\\\" ; ls plans\", \"description\": \"Inspect existing indexe"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-add-index-3.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"If an earlier interrupted CREATE INDEX CONCURRENTLY left an INVALID orders_customer_id_idx behind, drop it (IF NOT"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I've written the plan to `plans/plain-add-index-3.json`. I haven't run it. It has three steps, all SQL, with no app deploys:\n\n1. **Clean up a broken index.** If an earlier interrupted build left behind an invalid `orders_customer_id_idx`, this step drops it. Otherwise \"create if it doesn't exist\" would see the broken index and skip the build. The drop needs a brief exclusive lock on `orders`, so it gives up after 1s rather than make app queries wait behind it.\n2. **Build the index.** It runs `CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id)` with no statement timeout. Building concurrently lets the app's reads and inserts on the 10M-row `orders` table keep running during the build.\n3. **Check the result.** It confirms the index exists, is on `customer_id`, and is valid. If not, the plan fails here instead of reporting success.\n\nThe live database already has a valid `orders_customer_id_idx`, probably from an earlier run. Run against it as it is, the plan changes nothing. On a freshly seeded database it builds the index. Once the index exists, `GET /customer/ID` uses it instead of scanning the whole table."
+}

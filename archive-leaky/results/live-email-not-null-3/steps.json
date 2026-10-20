@@ -1,0 +1,58 @@
+[
+ {
+  "note": "Make the app store '' instead of NULL for guest orders. The column is still nullable, so old and new pods can run side by side during the rolling update.",
+  "kind": "deploy",
+  "start": 1792500651.4120762,
+  "end": 1792500655.06788,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish their in-flight requests (3 s drain + shutdown) so nothing writes NULL any more.",
+  "kind": "wait",
+  "start": 1792500655.06788,
+  "end": 1792500670.0685823,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill existing guest orders NULL -> '' in small primary-key ranges, committing after each batch: only short row locks, no long transaction, app traffic unaffected. Single DO statement so the in-block COMMITs are allowed.",
+  "kind": "sql",
+  "start": 1792500670.0685823,
+  "end": 1792500699.2791967,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID: enforced for new rows from now on, no table scan. Needs only a brief ACCESS EXCLUSIVE lock, taken with a short lock_timeout and retried so app queries never queue behind it for long. Skipped if it already exists.",
+  "kind": "sql",
+  "start": 1792500699.2791967,
+  "end": 1792500699.611412,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Safety sweep: convert any NULL that slipped in between the backfill and the constraint (e.g. a straggling old pod). Normally updates 0 rows; takes only a ROW EXCLUSIVE lock.",
+  "kind": "sql",
+  "start": 1792500699.611412,
+  "end": 1792500704.7443964,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts.",
+  "kind": "sql",
+  "start": 1792500704.7443964,
+  "end": 1792500706.0497844,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL (Postgres skips the table scan because the valid CHECK proves no NULLs), then drop the now-redundant CHECK. Both in one short transaction with a short lock_timeout and retries.",
+  "kind": "sql",
+  "start": 1792500706.0497844,
+  "end": 1792500706.3509123,
+  "ok": true,
+  "output": ""
+ }
+]

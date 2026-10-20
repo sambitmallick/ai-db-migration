@@ -1,0 +1,10 @@
+[
+ {
+  "note": "CREATE INDEX CONCURRENTLY",
+  "kind": "sql",
+  "start": 1792492794.2845452,
+  "end": 1792492800.4715292,
+  "ok": true,
+  "output": ""
+ }
+]

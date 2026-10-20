@@ -1,0 +1,31 @@
+$ podman build -t localhost/shop-db:1.0 app/ && podman save -o shop-db.tar localhost/shop-db:1.0 && kind load image-archive shop-db.tar --name dbmig && kubectl rollout restart deployment/shop && kubectl rollout status deployment/shop --timeout=120s
+STEP 1/6: FROM docker.io/library/node:24-alpine
+STEP 2/6: WORKDIR /app
+--> Using cache db5d3b5cba4a5e56a53d3040f93e667bcc9e97f1ef3a99341e39c42bfb6717b6
+--> db5d3b5cba4a
+STEP 3/6: COPY package.json ./
+--> Using cache 293138baa6d34e28c0081721d8c37ca56136676536334b3df612cdf4151078d0
+--> 293138baa6d3
+STEP 4/6: RUN npm install --omit=dev --no-audit --no-fund
+--> Using cache 7e29c0544b90f24639fac9ec1f334bd4f95d91b9173d26d44adfc52787463488
+--> 7e29c0544b90
+STEP 5/6: COPY server.js loadgen.js ./
+--> 40766098f3fa
+STEP 6/6: CMD ["node", "server.js"]
+COMMIT localhost/shop-db:1.0
+--> af8c380d7a07
+Successfully tagged localhost/shop-db:1.0
+af8c380d7a075e40f2f6121c164e93f7efdf68233c79f62817aaf1b7392d9f0c
+using podman due to KIND_EXPERIMENTAL_PROVIDER
+enabling experimental podman provider
+deployment.apps/shop restarted
+Waiting for deployment "shop" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "shop" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "shop" rollout to finish: 1 out of 3 new replicas have been updated...
+Waiting for deployment "shop" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "shop" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "shop" rollout to finish: 2 out of 3 new replicas have been updated...
+Waiting for deployment "shop" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "shop" rollout to finish: 1 old replicas are pending termination...
+deployment "shop" successfully rolled out
+[exit 0, 10s]

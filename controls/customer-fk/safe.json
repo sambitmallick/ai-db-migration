@@ -1,0 +1,14 @@
+{
+ "task": "customer-fk",
+ "by": "control (safe)",
+ "steps": [
+  {
+   "note": "add it NOT VALID (instant)",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ADD CONSTRAINT orders_customer_fk FOREIGN KEY (customer_id) REFERENCES customers (id) NOT VALID;"
+  },
+  {
+   "note": "validate it (doesn't block writes)",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_fk;"
+  }
+ ]
+}

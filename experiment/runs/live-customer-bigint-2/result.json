@@ -1,0 +1,47 @@
+{
+ "run": "live-customer-bigint-2",
+ "task": "customer-bigint",
+ "mode": "live",
+ "prompt": "/migrate customer-bigint plans/live-customer-bigint-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 185,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 9,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat tasks/customer-bigint/task.md; ls tasks plans; cat db/seed.sql; cat app/server.js; cat k8s/shop.yaml\", \"description\": \"Read task, schema, app, and deploy config\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version();\\\" ; bash scripts/db-ro.sh \\\"\\\\d+ orders\\\"; bash scripts/db-ro.sh \\\"select conname, contype, conrelid::regclass, pg_get_constraintdef(oid) from pg_constraint where connamespace='public'::regnamespace;\\\"; bash scripts/db-ro.s"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"explain analyze SELECT id, amount FROM orders WHERE customer_id = 777 ORDER BY id DESC LIMIT 10;\\\"; bash scripts/db-ro.sh \\\"select pg_size_pretty(pg_total_relation_size('orders')), n_live_tup, n_dead_tup, seq_scan, idx_scan, n_tup_ins, n_tup_upd, last_autovacuum "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select setrole::regrole, setdatabase, setconfig from pg_db_role_setting; select name, setting, source from pg_settings where name in ('statement_timeout','lock_timeout','idle_in_transaction_session_timeout','transaction_timeout');\\\"\", \"description\": \"Check role a"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-bigint-2.json\", \"content\": \"{\\\"task\\\": \\\"customer-bigint\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Trigger function that copies customer_id into the new bigint column on every insert and update. Creatin"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=require('./plans/live-customer-bigint-2.json'); console.log(p.task, p.steps.length)\\\"\", \"description\": \"Check the plan file parses as JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01WyFEDorfiY4kfdc6Pnxp5Y",
+   "tool_input": {
+    "command": "node -e \"const p=require('./plans/live-customer-bigint-2.json'); console.log(p.task, p.steps.length)\"",
+    "description": "Check the plan file parses as JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-bigint-2.json`. Nothing has been run. I also couldn't check that the JSON parses, because the tool call to do that was denied; I wrote it with no quotes or backslashes inside the SQL strings.\n\nChanging the column type directly would rewrite all 10M rows while the table is locked, so the plan adds a new column and swaps it in instead:\n\n1. **Add a new column.** In one short transaction it adds a nullable `customer_id_new bigint`, a trigger that copies `customer_id` into it on every insert and update, and two checks for new writes: \"new column is not null\" and \"new column equals old column\". This is a quick catalog change.\n2. **Backfill.** A procedure copies the old values into the new column in batches of 50,000 rows by id. It commits after each batch and pauses briefly. The app never updates orders, so the backfill doesn't block it.\n3. **`VACUUM (ANALYZE)`.** This clears out the old row versions the backfill leaves behind and gives the planner statistics for the new column, so the `/customer` query plan stays the same after the rename. It doesn't block reads or writes.\n4. **Validate both checks across all rows.** This proves every row's new value is present and identical to the old one, without blocking traffic. If any row differs, this step fails and the plan stops with nothing dropped.\n5. **Swap.** In one short transaction it sets `NOT NULL` (instant, because the validated check already proves there are no NULLs), drops the trigger and checks, drops the old integer column and renames `customer_id_new` to `customer_id`.\n6. **Clean up and check.** It drops the helper function and procedure, then confirms `orders.customer_id` is `bigint NOT NULL` and the helper column is gone.\n\nThe two locking steps (1 and 5) wait at most 100 ms for the table lock and retry if they don't get it, for about a minute in total. App queries never queue behind them for long, and they stay well under the app's 2-second query timeout. If they still can"
+}

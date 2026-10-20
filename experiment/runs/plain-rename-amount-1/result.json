@@ -1,0 +1,55 @@
+{
+ "run": "plain-rename-amount-1",
+ "task": "rename-amount",
+ "mode": "plain",
+ "prompt": "/migrate rename-amount plans/plain-rename-amount-1.json",
+ "seconds": 132,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 9,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\rename-amount\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls scripts harness plans tasks; cat scripts/db-ro.sh\", \"description\": \"List scripts, harness, plans, tasks\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version();\\\" && bash scripts/db-ro.sh \\\"\\\\d orders\\\" && bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema','pg_toast');\\\" && b"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-rename-amount-1.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Expand: create the trigger function that keeps amount and total in sync (whichever one a writer leaves NUL"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=JSON.parse(require('fs').readFileSync('plans/plain-rename-amount-1.json','utf8'));console.log(p.task,p.steps.length)\\\"\", \"description\": \"Check the plan file parses as JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01Gos1AmzH1YuC3YTKaiAW1d",
+   "tool_input": {
+    "command": "node -e \"const p=JSON.parse(require('fs').readFileSync('plans/plain-rename-amount-1.json','utf8'));console.log(p.task,p.steps.length)\"",
+    "description": "Check the plan file parses as JSON"
+   }
+  }
+ ],
+ "answer": "I've written the plan to `plans/plain-rename-amount-1.json`. I haven't run it, and I couldn't check that the file parses as JSON because running a check command was blocked.\n\nThe plan never renames the column in place. A rename would break whichever app pods are still using the old name, so it works in four phases that keep reads and writes working all the way through:\n\n1. **Add `total`.** It creates a nullable `total numeric(10,2)` plus a trigger. The trigger fills whichever of `amount` or `total` an insert or update leaves empty, so pods writing either column keep working.\n2. **Copy the data.** It copies `amount` into `total` for the existing ~10M rows, 20k rows at a time, committing after each batch. No long transaction holds locks.\n3. **Make `total` NOT NULL.** It adds a check constraint without checking existing rows, then checks them in a separate step that doesn't block reads or writes. After that, `SET NOT NULL` needs only a brief lock, and the check is removed.\n4. **Switch the app.** It deploys `AMOUNT_READ=total` and `AMOUNT_WRITE=total`. During the rolling update old and new pods run side by side, and the trigger covers both.\n5. **Remove `amount`.** It waits 35 s for old pods to shut down. It then also waits until no database connection is still running the old app's queries; if any remain after about 2 minutes, it stops without dropping anything. Finally, in one transaction, it drops the trigger and the `amount` column, and then the trigger function.\n\nEvery step that needs an exclusive lock on `orders` gives up after 200 ms and retries. That stops app queries from piling up behind a waiting schema change. This matters because `/customer` requests scan the whole table and can run for up to 2 s.\n\nTwo assumptions:\n- **Each SQL step runs at the top level, not inside a transaction.** The copy step commits inside a `DO` block, which Postgres refuses within a transaction. The skill says statements run in autocommit mode, so this should be fine.\n- **The table wi"
+}

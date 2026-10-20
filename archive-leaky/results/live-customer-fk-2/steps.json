@@ -1,0 +1,34 @@
+[
+ {
+  "note": "Pre-check, read-only: if the FK is not already in place and validated, stop before touching anything when orders reference customers that don't exist. The FK can't hold on that data, and fixing it would mean changing data.",
+  "kind": "sql",
+  "start": 1792501117.7826455,
+  "end": 1792501119.6501603,
+  "ok": true,
+  "output": "NOTICE:  no orphan orders"
+ },
+ {
+  "note": "Add the FK as NOT VALID: catalog-only, instant, enforced for new and updated rows from now on. It briefly needs a SHARE ROW EXCLUSIVE lock on orders and customers, so lock_timeout is 300 ms. That way app queries never queue behind it for long (they have a 2 s timeout), and it retries up to 60 times. Skipped if an FK on orders(customer_id) -> customers(id) already exists.",
+  "kind": "sql",
+  "start": 1792501119.6501603,
+  "end": 1792501119.906269,
+  "ok": true,
+  "output": "NOTICE:  FK added NOT VALID on attempt 1"
+ },
+ {
+  "note": "Validate the existing rows. VALIDATE CONSTRAINT takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so app reads and inserts keep running while it scans the 10M rows. No statement timeout. Skipped if the FK is already validated.",
+  "kind": "sql",
+  "start": 1792501119.906269,
+  "end": 1792501121.3706954,
+  "ok": true,
+  "output": "NOTICE:  validated orders_customer_id_fkey"
+ },
+ {
+  "note": "Verify: a validated FK orders(customer_id) -> customers(id) exists.",
+  "kind": "sql",
+  "start": 1792501121.3706954,
+  "end": 1792501121.613238,
+  "ok": true,
+  "output": "NOTICE:  OK: validated FK in place"
+ }
+]

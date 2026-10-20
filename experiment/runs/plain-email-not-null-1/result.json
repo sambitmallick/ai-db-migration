@@ -1,0 +1,51 @@
+{
+ "run": "plain-email-not-null-1",
+ "task": "email-not-null",
+ "mode": "plain",
+ "prompt": "/migrate email-not-null plans/plain-email-not-null-1.json",
+ "seconds": 91,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 11,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\email-not-null\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls plans scripts harness 2>&1; cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); select count(*) filter (where email is null) nulls, count(*) filter (where email='') empties, min(id), max(id) from orders; select conname, pg_get_constraintdef(oid) from pg_constraint where c"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"python - <<'EOF'\\nimport json\\nB=250_000; END=10_250_000\\ndef retry(ddl):\\n    return (\\\"DO $$ BEGIN PERFORM set_config('lock_timeout','300ms',true); \\\"\\n            \\\"FOR i IN 1..100 LOOP BEGIN \\\" + ddl + \\\"; RETURN; \\\"\\n            \\\"EXCEPTION WHEN lock_not_available THEN PERFORM pg_s"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-email-not-null-1.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"App stores '' instead of NULL for guest orders from now on (rolling update, no downtime).\\\",\\n   \\\"deplo"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01HtMKzhwNuYgsAvxBKiyXEX",
+   "tool_input": {
+    "command": "python - <<'EOF'\nimport json\nB=250_000; END=10_250_000\ndef retry(ddl):\n    return (\"DO $$ BEGIN PERFORM set_config('lock_timeout','300ms',true); \"\n            \"FOR i IN 1..100 LOOP BEGIN \" + ddl + \"; RETURN; \"\n            \"EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.3); END; END LOOP; \"\n            \"RAISE EXCEPTION 'could not lock orders'; END $$;\")\nsteps=[\n {\"note\":\"App stores '' instead of NULL for guest orders from now on (rolling update, no downtime).\",\"deploy\":{\"GUEST_EMAIL\":\"empty\"}},\n {\"note\":\"Let the old pods finish their in-flight requests and exit.\",\"wait\":10},\n {\"note\":\"Forbid new NULL emails: CHECK constraint NOT VALID (brief lock, no table scan; short lock_timeout with retries so app queries never queue behind it).\",\n  \"sql\":retry(\"ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID\")},\n]\nstarts=list(range(1,END,B))\nfor k in range(0,len(starts),10):\n    chunk=starts[k:k+10]\n    sql=\" \".join(f\"UPDATE orders SET email = '' WHERE id >= {s} AND id < {s+B} AND email IS NULL;\" for s in chunk)\n    steps.append({\"note\":f\"Backfill guest orders: ids {chunk[0]}..{chunk[-1]+B-1}, in batches of {B} ids, each batch its own transaction.\",\"sql\":sql})\nsteps+=[\n {\"note\":\"Sweep any NULL email left anywhere (e.g. ids beyond the batched range).\",\"sql\":\"UPDATE orders SET email = '' WHERE email IS NULL;\"},\n {\"note\":\"Validate the CHECK constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes.\",\"sql\":\"ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;\"},\n {\"note\":\"SET NOT NULL: Postgres uses the validated CHECK to skip the table scan, so the exclusive lock is momentary.\",\n  \"sql\":retry(\"ALTER TABLE orders ALTER COLUMN email SET NOT NULL\")},\n {\"note\":\"Drop the now-redundant CHECK constraint.\",\"sql\":retry(\"ALTER TABLE orders DROP CONSTRAINT orders_email_not_null\")},\n {\"note\":\"Verify: email is NOT NULL and no NULLs remain (fails the plan otherwise).\",\n  \"sql\":\"DO $$ BEGIN IF NOT (SELECT attnotnull FROM pg_attribute WHERE attrelid='orders'::regclass AND attname='email') THEN RAISE EXCEPTION 'email is still nullable'; END IF; END $$;\"},\n]\njson.dump({\"task\":\"email-not-null\",\"steps\":steps},open(\"plans/plain-email-not-null-1.json\",\"w\"),indent=1)\nprint(len(steps))\nEOF\npython -c \"import json;d=json.load(open('plans/plain-email-not-null-1.json'));print(d['steps'][3]['sql'][:200]);print(d['steps'][2]['sql'])\"",
+    "description": "Generate the migration plan JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-email-not-null-1.json`. I haven't run it or checked that the JSON parses, because the shell command I tried for that was denied; I checked it by eye only.\n\nThe live database (Postgres 17) has 2,500,133 orders with a NULL email, no empty-string emails, and only the primary key as a constraint.\n\nWhat the plan does:\n1. **Deploy `GUEST_EMAIL=empty`**, then wait 10 s. After that, every pod writes `''` for guest orders and the old pods have finished their requests.\n2. **Block new NULLs** by adding `CHECK (email IS NOT NULL) NOT VALID`. This doesn't scan the table and takes the table lock only for a moment.\n3. **Backfill** the NULLs to `''` in 500k-id batches, each committing on its own, so there's no long transaction. A final `WHERE email IS NULL` pass catches anything outside those ranges.\n4. **Validate the check.** This scans the whole table, but its lock doesn't block reads or writes.\n5. **`SET NOT NULL`**, which skips the table scan because the validated check already proves there are no NULLs. Then the check, no longer needed, is dropped, and a last step fails the plan if `orders.email` is still nullable.\n\nEvery step that needs the exclusive lock waits at most 300 ms for it and retries up to 100 times. That way the app's queries, which time out after 2 s, never pile up behind a waiting `ALTER`, even while a slow `/customer` scan is running."
+}

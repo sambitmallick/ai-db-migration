@@ -1,0 +1,250 @@
+[
+ {
+  "note": "Create the trigger function that keeps amount and total equal on every insert/update (takes no lock on orders).",
+  "kind": "sql",
+  "start": 1792509001.268634,
+  "end": 1792509001.5413678,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add nullable column total (metadata-only, instant) and the sync trigger in one transaction. 200ms lock_timeout with retries so live queries never queue long behind the lock.",
+  "kind": "sql",
+  "start": 1792509001.5413678,
+  "end": 1792509001.8169227,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill total = amount for ids 1..1000000 in 10k-row batches, each committed on its own.",
+  "kind": "sql",
+  "start": 1792509001.8169227,
+  "end": 1792509010.659664,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum so this chunk's dead row versions get reused instead of bloating the table.",
+  "kind": "sql",
+  "start": 1792509010.659664,
+  "end": 1792509011.678399,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1000001..2000000.",
+  "kind": "sql",
+  "start": 1792509011.678399,
+  "end": 1792509020.5109382,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509020.5109382,
+  "end": 1792509021.6451225,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2000001..3000000.",
+  "kind": "sql",
+  "start": 1792509021.6451225,
+  "end": 1792509030.5439458,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509030.5439458,
+  "end": 1792509031.4751782,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 3000001..4000000.",
+  "kind": "sql",
+  "start": 1792509031.4751782,
+  "end": 1792509040.256293,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509040.256293,
+  "end": 1792509041.2845807,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4000001..5000000.",
+  "kind": "sql",
+  "start": 1792509041.2845807,
+  "end": 1792509050.4086394,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509050.4086394,
+  "end": 1792509053.0479527,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5000001..6000000.",
+  "kind": "sql",
+  "start": 1792509053.0479527,
+  "end": 1792509062.3641968,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509062.3641968,
+  "end": 1792509063.322235,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6000001..7000000.",
+  "kind": "sql",
+  "start": 1792509063.322235,
+  "end": 1792509072.223045,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509072.223045,
+  "end": 1792509073.2295167,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7000001..8000000.",
+  "kind": "sql",
+  "start": 1792509073.2295167,
+  "end": 1792509082.0192683,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509082.0192683,
+  "end": 1792509083.0215888,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8000001..9000000.",
+  "kind": "sql",
+  "start": 1792509083.0215888,
+  "end": 1792509091.9736726,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509091.9736726,
+  "end": 1792509093.1871543,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 9000001..max(id). This covers every row inserted before the trigger existed; rows inserted since get total from the trigger.",
+  "kind": "sql",
+  "start": 1792509093.1871543,
+  "end": 1792509102.077719,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509102.077719,
+  "end": 1792509103.227172,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check that every row has total equal to amount. If not, the plan stops here, before anything irreversible.",
+  "kind": "sql",
+  "start": 1792509103.227172,
+  "end": 1792509105.2030857,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add NOT NULL as a NOT VALID check constraint (instant; short lock with retries).",
+  "kind": "sql",
+  "start": 1792509105.2030857,
+  "end": 1792509105.6195977,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check constraint. This scans the table under SHARE UPDATE EXCLUSIVE, which doesn't block reads or writes.",
+  "kind": "sql",
+  "start": 1792509105.6195977,
+  "end": 1792509106.6541426,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL on total. There's no table scan because Postgres uses the validated check. Then drop the now-redundant check (short lock with retries).",
+  "kind": "sql",
+  "start": 1792509106.6541426,
+  "end": 1792509107.024927,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Roll the app over to reading and writing total. During the rollout, old pods write only amount and new pods write only total. The BEFORE trigger fills in the other column, so both NOT NULL columns stay valid and equal.",
+  "kind": "deploy",
+  "start": 1792509107.024927,
+  "end": 1792509112.0377915,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Give terminating old pods (30 s grace period) time to finish in-flight requests that still use amount.",
+  "kind": "wait",
+  "start": 1792509112.0377915,
+  "end": 1792509152.0391731,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check again that total equals amount for every row before dropping anything.",
+  "kind": "sql",
+  "start": 1792509152.0391731,
+  "end": 1792509153.7517765,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the sync trigger, the old amount column and the function in one short transaction (short lock with retries).",
+  "kind": "sql",
+  "start": 1792509153.7517765,
+  "end": 1792509154.1473327,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Clean up the last dead row versions and refresh planner statistics.",
+  "kind": "sql",
+  "start": 1792509154.1473327,
+  "end": 1792509154.7692008,
+  "ok": true,
+  "output": ""
+ }
+]

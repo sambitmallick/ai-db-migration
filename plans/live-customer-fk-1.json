@@ -1,0 +1,10 @@
+{"task": "customer-fk", "steps": [
+  {"note": "Pre-check: refuse to go on if any order references a missing customer (live DB has 0 today). Nothing is deleted or changed; the plan just stops.",
+   "sql": "SET statement_timeout = 0; DO $$ BEGIN IF EXISTS (SELECT 1 FROM orders o WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.id = o.customer_id)) THEN RAISE EXCEPTION 'orphan orders exist: not adding the foreign key'; END IF; END $$;"},
+  {"note": "Add the FK as NOT VALID: catalog-only, no table scan. Needs a brief SHARE ROW EXCLUSIVE lock on orders and customers, so take it with a short lock_timeout and retry, never queueing in front of app traffic for more than 200 ms. From here on every new or updated order is checked.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE i int := 0; BEGIN IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_customer_id_fkey' AND conrelid = 'orders'::regclass) THEN RETURN; END IF; LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 50 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"},
+  {"note": "Validate existing rows. VALIDATE takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so reads and inserts keep running during the scan of 10M rows.",
+   "sql": "SET statement_timeout = 0; SET lock_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_fkey;"},
+  {"note": "Verify the constraint exists and is validated; fail the step otherwise.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_customer_id_fkey' AND conrelid = 'orders'::regclass AND contype = 'f' AND convalidated) THEN RAISE EXCEPTION 'orders_customer_id_fkey missing or not validated'; END IF; END $$;"}
+]}

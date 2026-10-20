@@ -1,0 +1,74 @@
+[
+ {
+  "note": "Create the sync trigger function: on INSERT fill whichever of amount/total is missing from the other; on UPDATE copy whichever one changed to the other. No table lock needed.",
+  "kind": "sql",
+  "start": 1792493518.7721984,
+  "end": 1792493519.0235226,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In one short transaction: add nullable column total (metadata only, no rewrite), attach the sync trigger, and add a NOT VALID check (total IS NOT NULL) so new rows are already enforced. Takes the table lock with a 200 ms lock_timeout and retries, so app queries never queue behind it for long.",
+  "kind": "sql",
+  "start": 1792493519.0235226,
+  "end": 1792493519.285523,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill total = amount for existing rows in batches of 20,000 ids, committing after each batch (short row locks, no long transaction). New rows are already filled by the trigger.",
+  "kind": "sql",
+  "start": 1792493519.285523,
+  "end": 1792493578.8514924,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Safety net: fill any row still missing total (should be none).",
+  "kind": "sql",
+  "start": 1792493578.8514924,
+  "end": 1792493587.662208,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check constraint. Scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or writes.",
+  "kind": "sql",
+  "start": 1792493587.662208,
+  "end": 1792493589.4111595,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Make total NOT NULL. The validated check lets Postgres skip the full-table scan, so the exclusive lock is momentary; then drop the now-redundant check. Lock taken with lock_timeout + retry.",
+  "kind": "sql",
+  "start": 1792493589.4111595,
+  "end": 1792493589.6557531,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Switch the app to read and write total. During the rolling update old pods write amount and new pods write total; the trigger keeps both columns identical, so every pod reads correct values.",
+  "kind": "deploy",
+  "start": 1792493589.6557531,
+  "end": 1792493593.3283446,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish their in-flight requests (3 s drain + up to 2 s statement timeout) before amount disappears.",
+  "kind": "wait",
+  "start": 1792493593.3283446,
+  "end": 1792493613.3296301,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In one short transaction: drop the sync trigger and the amount column (metadata only, no rewrite), with lock_timeout + retry. Then drop the trigger function.",
+  "kind": "sql",
+  "start": 1792493613.3296301,
+  "end": 1792493613.5796864,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,51 @@
+{
+ "run": "live-customer-fk-3",
+ "task": "customer-fk",
+ "mode": "live",
+ "prompt": "/migrate customer-fk plans/live-customer-fk-3.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 90,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 4,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/customer-fk/task.md && ls tasks/customer-fk plans && cat db/seed.sql && cat k8s/shop.yaml\", \"description\": \"Read task, seed schema and k8s manifest\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat app/server.js; cat scripts/db-ro.sh; ls plans results | head -50\", \"description\": \"Read app server and helper script\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"\\\\d customers\\\"; bash scripts/db-ro.sh \\\"select rolname, rolconfig from pg_roles where rolconfig is not null; select name, setting from pg_settings"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select count(*) from (select distinct customer_id from orders o where not exists (select 1 from customers c where c.id=o.customer_id)) x;\\\" ; bash scripts/db-ro.sh \\\"select o.customer_id"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls -R harness experiment controls scripts | head -60; bash scripts/db-ro.sh \\\"select d.datname, r.rolname, s.setconfig from pg_db_role_setting s left join pg_database d on d.oid=s.setdatabase left join pg_roles"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-fk-3.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Safety check before changing anything: abort the plan if any order already points at a missing customer. Read-o"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/live-customer-fk-3.json'); console.log(p.task, p.steps.length)\\\"\", \"description\": \"Validate the plan JSON parses\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01623ahprjdUQnRBscBVUwCb",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/live-customer-fk-3.json'); console.log(p.task, p.steps.length)\"",
+    "description": "Validate the plan JSON parses"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-fk-3.json`. I couldn't run the check that the JSON parses (that command was blocked), so I only checked it by reading it. It has four steps:\n\n1. **Check first, change nothing:** scans the orders for any whose customer doesn't exist, and stops the plan if it finds one. Nothing is deleted or rewritten.\n2. **Add the foreign key as `NOT VALID`:** new rows are checked from this point, but the 10M existing rows aren't scanned. This needs a lock that blocks new orders for a moment (reads keep working). A 300ms lock timeout keeps any waiting order well under the app's 2-second query timeout. If the lock isn't free, it waits a second and tries again, up to 60 times. If an orders\u2192customers foreign key already exists, the step does nothing.\n3. **`VALIDATE CONSTRAINT` as its own step:** this checks the existing rows without blocking reads or new orders. Parallel workers are off for this session to reduce the extra load on the database while traffic is running.\n4. **Confirm:** fails the plan if the foreign key is missing or not validated.\n\nNo app deploy is needed because the app doesn't change.\n\n- **The live database already has this foreign key.** `orders_customer_id_fkey` is there and validated, probably left by an earlier run. The plan expects the database to be reset from `db/seed.sql` first, but if it isn't, steps 2\u20134 still complete safely.\n- **Orders with a customer that doesn't exist will now fail.** That's the point of the foreign key, but if any traffic sends customer IDs outside 1\u201350,000, those requests will start returning errors once step 2 runs.\n- **Not in scope:** there's no index on `orders.customer_id`. The app doesn't delete customers, so it isn't needed for this, but customer deletes would be slow without one."
+}

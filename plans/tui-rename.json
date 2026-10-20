@@ -1,0 +1,22 @@
+{"task": "rename-amount", "steps": [
+  {"note": "Pre-check: orders.amount exists, total does not, and nothing named orders_t is in the way.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='orders' AND column_name='amount') THEN RAISE EXCEPTION 'orders.amount not found'; END IF; IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='orders' AND column_name='total') THEN RAISE EXCEPTION 'orders.total already exists'; END IF; IF to_regclass('public.orders_t') IS NOT NULL THEN RAISE EXCEPTION 'public.orders_t already exists'; END IF; END $$;"},
+
+  {"note": "Rename in place (metadata only, no row rewrite) and put a compatibility view named orders in front of the table that exposes the column as both total and amount. It is a simple, automatically updatable view: old pods insert/read amount, new pods insert/read total, both hit the same base column, and base defaults (id sequence, created_at) still apply. All three DDLs commit together. The short lock_timeout and retry loop keep it from queueing app traffic behind a pending ACCESS EXCLUSIVE lock while slow /customer scans hold the table.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '300ms', true); LOOP BEGIN ALTER TABLE public.orders RENAME TO orders_t; ALTER TABLE public.orders_t RENAME COLUMN amount TO total; CREATE VIEW public.orders AS SELECT id, customer_id, total, total AS amount, status, email, created_at FROM public.orders_t; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 200 THEN RAISE EXCEPTION 'could not lock orders after % attempts', i; END IF; PERFORM pg_sleep(0.2); END; END LOOP; END $$;"},
+
+  {"note": "Check the view answers under both column names.",
+   "sql": "SELECT id, amount, total FROM public.orders WHERE id = 1 AND amount = total;"},
+
+  {"note": "Roll the app over to the new column name. During the rolling update old pods use amount and new pods use total through the view.",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total"}},
+
+  {"note": "Let terminating old pods drain (they keep serving ~3 s after SIGTERM, plus in-flight requests of up to 2 s).",
+   "wait": 15},
+
+  {"note": "Drop the compatibility view and give the table its name back, atomically, with the same lock_timeout and retry loop. From here on the amount column no longer exists anywhere.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '300ms', true); LOOP BEGIN DROP VIEW public.orders; ALTER TABLE public.orders_t RENAME TO orders; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 200 THEN RAISE EXCEPTION 'could not lock orders after % attempts', i; END IF; PERFORM pg_sleep(0.2); END; END LOOP; END $$;"},
+
+  {"note": "Verify the end state: orders is a table, total is numeric(10,2) NOT NULL, amount is gone.",
+   "sql": "DO $$ BEGIN IF (SELECT relkind FROM pg_class WHERE oid = 'public.orders'::regclass) <> 'r' THEN RAISE EXCEPTION 'orders is not a table'; END IF; IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'total' AND NOT attisdropped AND attnotnull AND format_type(atttypid, atttypmod) = 'numeric(10,2)') THEN RAISE EXCEPTION 'orders.total missing or wrong type/nullability'; END IF; IF EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'public.orders'::regclass AND attname = 'amount' AND NOT attisdropped) THEN RAISE EXCEPTION 'orders.amount still exists'; END IF; END $$;"}
+]}

@@ -1,0 +1,146 @@
+[
+ {
+  "note": "Trigger function that keeps the new bigint column equal to customer_id on every insert/update. Creating a function takes no lock on orders.",
+  "kind": "sql",
+  "start": 1792509854.1827118,
+  "end": 1792509854.619581,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add the nullable column customer_id_new bigint (metadata only, no rewrite), two NOT VALID checks (not null, equals customer_id) and the sync trigger, all in one short transaction. The table lock is taken with a 100 ms lock_timeout and retried, so app queries never queue behind it for long.",
+  "kind": "sql",
+  "start": 1792509854.619581,
+  "end": 1792509855.076405,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1..2,000,000 in batches of 20,000 rows, committing each batch. Only rows still NULL are touched, and customer_id is never changed.",
+  "kind": "sql",
+  "start": 1792509855.076405,
+  "end": 1792509869.0641093,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Reclaim the old row versions so the next batch reuses the space instead of growing the table.",
+  "kind": "sql",
+  "start": 1792509869.0641093,
+  "end": 1792509871.1936915,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,000,001..4,000,000.",
+  "kind": "sql",
+  "start": 1792509871.1936915,
+  "end": 1792509884.974204,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509884.974204,
+  "end": 1792509887.094982,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4,000,001..6,000,000.",
+  "kind": "sql",
+  "start": 1792509887.094982,
+  "end": 1792509904.119166,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509904.119166,
+  "end": 1792509906.2323189,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6,000,001..8,000,000.",
+  "kind": "sql",
+  "start": 1792509906.2323189,
+  "end": 1792509920.172003,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509920.172003,
+  "end": 1792509922.277058,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8,000,001 up to the current max(id). Every row inserted since the trigger was created already has the column set by the trigger.",
+  "kind": "sql",
+  "start": 1792509922.277058,
+  "end": 1792509936.2812557,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792509936.2812557,
+  "end": 1792509938.341698,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the not-null check: it scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts. It fails, and the plan stops, if any row was missed.",
+  "kind": "sql",
+  "start": 1792509938.341698,
+  "end": 1792509939.953254,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check that every row has customer_id_new = customer_id, which proves no value changed.",
+  "kind": "sql",
+  "start": 1792509939.953254,
+  "end": 1792509941.1816707,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Gather planner statistics for the new column, so the /customer query keeps a good plan after the swap.",
+  "kind": "sql",
+  "start": 1792509941.1816707,
+  "end": 1792509941.8021615,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Swap in one short transaction, again taking the lock with a 100 ms lock_timeout and retrying. SET NOT NULL skips the table scan because of the validated check. Then drop the checks and the trigger, drop the old integer column (metadata only) and rename customer_id_new to customer_id. The app refers to customer_id by name, so it works unchanged before and after.",
+  "kind": "sql",
+  "start": 1792509941.8021615,
+  "end": 1792509942.1904843,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Clean up the trigger function, which is no longer used.",
+  "kind": "sql",
+  "start": 1792509942.1904843,
+  "end": 1792509942.5736508,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the result: orders.customer_id must be bigint and NOT NULL.",
+  "kind": "sql",
+  "start": 1792509942.5736508,
+  "end": 1792509943.022483,
+  "ok": true,
+  "output": ""
+ }
+]

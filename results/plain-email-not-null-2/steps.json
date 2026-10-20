@@ -1,0 +1,42 @@
+[
+ {
+  "note": "Roll the app so guest orders store '' instead of NULL. After this no new NULL emails are written.",
+  "kind": "deploy",
+  "start": 1792506058.1786401,
+  "end": 1792506061.5609968,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Backfill existing NULL emails to '' in small id-range batches, each committed on its own, so row locks are short and no long transaction holds up the app or vacuum.",
+  "kind": "sql",
+  "start": 1792506061.5609968,
+  "end": 1792506081.0419323,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) as NOT VALID: blocks any new NULL, no table scan. Needs a brief ACCESS EXCLUSIVE lock, so take it with a short lock_timeout and retry rather than queueing in front of app queries.",
+  "kind": "sql",
+  "start": 1792506081.0419323,
+  "end": 1792506081.2939928,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails (and stops the plan) if any NULL remains.",
+  "kind": "sql",
+  "start": 1792506081.2939928,
+  "end": 1792506087.459126,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL: Postgres uses the validated CHECK to skip the table scan, so the ACCESS EXCLUSIVE lock is only momentary. Then drop the now-redundant CHECK. Same short-lock retry.",
+  "kind": "sql",
+  "start": 1792506087.459126,
+  "end": 1792506087.7162678,
+  "ok": true,
+  "output": ""
+ }
+]

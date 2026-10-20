@@ -1,0 +1,18 @@
+[
+ {
+  "note": "add it NOT VALID (instant)",
+  "kind": "sql",
+  "start": 1792491639.4993334,
+  "end": 1792491639.7604415,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "validate it (doesn't block writes)",
+  "kind": "sql",
+  "start": 1792491639.7604415,
+  "end": 1792491641.79622,
+  "ok": true,
+  "output": ""
+ }
+]

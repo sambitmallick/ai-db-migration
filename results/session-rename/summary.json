@@ -1,0 +1,47 @@
+{
+ "task": "rename-amount",
+ "label": "session-rename",
+ "plan": "plans/tui-rename.json",
+ "steps": 7,
+ "steps_run": 7,
+ "completed": true,
+ "empty_plan": false,
+ "failed_step": null,
+ "migration_seconds": 19.8,
+ "baseline": {
+  "requests": 1341,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 11,
+  "max_ms": 59
+ },
+ "during": {
+  "requests": 1215,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 6,
+  "max_ms": 28
+ },
+ "after": {
+  "requests": 1843,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 9,
+  "max_ms": 48
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.4,
+  "during_rps": 61.5,
+  "after_rps": 61.4
+ },
+ "traffic_ok": true,
+ "checks_passed": 7,
+ "checks": 7,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=total AMOUNT_WRITE=total GUEST_EMAIL=null"
+}

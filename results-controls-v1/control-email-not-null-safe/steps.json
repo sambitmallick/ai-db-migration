@@ -1,0 +1,42 @@
+[
+ {
+  "note": "app stores '' for guest orders first",
+  "kind": "deploy",
+  "start": 1792489514.945752,
+  "end": 1792489518.6405573,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "backfill the old NULLs in batches",
+  "kind": "sql",
+  "start": 1792489518.6405573,
+  "end": 1792489541.018037,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "email: NOT NULL via a validated CHECK",
+  "kind": "sql",
+  "start": 1792489541.018037,
+  "end": 1792489541.3736198,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "validate the check (scans, but doesn't block writes)",
+  "kind": "sql",
+  "start": 1792489541.3736198,
+  "end": 1792489551.431142,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL (instant: the check proves it), drop the check",
+  "kind": "sql",
+  "start": 1792489551.431142,
+  "end": 1792489551.7261534,
+  "ok": true,
+  "output": ""
+ }
+]

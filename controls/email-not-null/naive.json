@@ -1,0 +1,14 @@
+{
+ "task": "email-not-null",
+ "by": "control (naive)",
+ "steps": [
+  {
+   "note": "fill the NULLs",
+   "sql": "UPDATE orders SET email = '' WHERE email IS NULL;"
+  },
+  {
+   "note": "SET NOT NULL",
+   "sql": "ALTER TABLE orders ALTER COLUMN email SET NOT NULL;"
+  }
+ ]
+}

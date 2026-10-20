@@ -1,0 +1,62 @@
+{
+ "run": "plain-customer-bigint-3",
+ "task": "customer-bigint",
+ "mode": "plain",
+ "prompt": "/migrate customer-bigint plans/plain-customer-bigint-3.json",
+ "seconds": 139,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 15,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-bigint\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"\\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"select conname, conrelid::regclass, pg_get_constraintdef(oid) from pg_constraint where connamespace not in ('pg_catalog'::regnamespace,'information_schema'::regnamespace)\\\"; bash scripts/db-ro.sh \\\"sel"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls harness scripts plans; grep -rn \\\"psql\\\" harness scripts | head -30\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select rolname, rolconfig from pg_roles where rolconfig is not null\\\"; bash scripts/db-ro.sh \\\"select * from pg_db_role_setting\\\"; bash scripts/db-ro.sh \\\"select name, setting, source from pg_settings where name in ('statement_timeout','lock_timeout','idle_in_tra"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"explain analyze SELECT id, amount FROM orders WHERE customer_id = 777 ORDER BY id DESC LIMIT 10\\\"\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-bigint-3.json\", \"content\": \"{\\\"task\\\": \\\"customer-bigint\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Trigger function that keeps the new bigint column equal to customer_id on every insert/update. Touches"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=require('./plans/plain-customer-bigint-3.json');console.log(p.task,p.steps.length)\\\"\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_018JUf4KWqC8T8bEmzc8jjJU",
+   "tool_input": {
+    "command": "node -e \"const p=require('./plans/plain-customer-bigint-3.json');console.log(p.task,p.steps.length)\""
+   }
+  }
+ ],
+ "answer": "The plan is written to `plans/plain-customer-bigint-3.json` (15 steps). I couldn't check that the file parses: running `node` was blocked. The SQL has no quotes or backslashes that would need escaping, but I haven't confirmed it.\n\n**Why not a plain `ALTER COLUMN ... TYPE bigint`:** that would rewrite all 10M orders while holding an exclusive lock. Every app query, each with its 2 s timeout, would fail until it finished. Instead the plan does this:\n\n1. **Add a new column.** It adds a nullable `customer_id_new bigint`, a `NOT VALID` \"is not null\" check, and a trigger that copies `customer_id` into the new column on every insert or update. Each lock is requested with a 200 ms timeout and retried, so app queries never wait behind the migration for longer than that.\n2. **Copy the existing values.** It fills the new column in 50k-row batches with a commit after each batch, in four id ranges with a `VACUUM` between them. The vacuums keep the table from doubling in size.\n3. **Check and validate.** The plan stops if any row's new value is missing or differs from `customer_id`. Then it validates the \"not null\" check, which doesn't block app reads or inserts.\n4. **Swap the columns.** One short transaction, using the same lock timeout and retries, makes the new column `NOT NULL` (instant, because the check is already validated). It then drops the check, the trigger and the old integer column, and renames `customer_id_new` to `customer_id`.\n5. **Clean up and confirm.** It drops the trigger function, runs `ANALYZE`, and confirms that `customer_id` is now `bigint NOT NULL`.\n\n**What changes for the app:**\n- **No redeploy:** the column keeps its name and the app doesn't need any new settings.\n- **Number becomes text:** the Node `pg` driver returns bigint values as strings, so `GET /order/ID` will show `customer_id` as `\"123\"` instead of `123`. The order `id` field already works this way. The app's settings can't change this, so check that nothing depends on it being a number.\n- **Co"
+}

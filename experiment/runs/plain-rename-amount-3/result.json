@@ -1,0 +1,63 @@
+{
+ "run": "plain-rename-amount-3",
+ "task": "rename-amount",
+ "mode": "plain",
+ "prompt": "/migrate rename-amount plans/plain-rename-amount-3.json",
+ "seconds": 137,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 14,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\rename-amount\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd /d/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace; ls harness scripts plans tasks tasks/rename-amount; cat scripts/db-ro.sh\", \"description\": \"List harness, scripts, plans, tasks\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd /d/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace; bash scripts/db-ro.sh \\\"select version();\\\" ; bash scripts/db-ro.sh \\\"\\\\d orders\\\"; bash scripts/db-ro.sh \\\"select n_live_tup, n_dead_tup, pg_size_pretty(pg_total_relation_size('orders')) from pg_stat_user_tables whe"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd /d/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace; bash scripts/db-ro.sh \\\"\\\\timing on\\\" -c \\\"x\\\" 2>/dev/null; bash scripts/db-ro.sh \\\"explain (analyze, buffers) SELECT id, amount FROM orders WHERE customer_id = 123 ORDER BY id DESC LIMIT 10\\\"; bash scripts/db-ro.sh "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"which python python3 node 2>/dev/null\", \"description\": \"Check available interpreters\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"mkdir -p /tmp/plangen && cat > /tmp/plangen/gen.py <<'EOF'\\nimport json, sys\\nout = sys.argv[1]\\n\\ndef retry(body, tries=100):\\n    # Run DDL that takes a strong lock on orders without queueing app traffic behind it:\\n    # short lock_timeout, back off and retry.\\n    return (\\\"DO $$ DE"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-rename-amount-3.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Sync function: on insert, fill whichever of amount/total is missing from the other; on update, copy the ch"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01UaUJf5QJc7w3hy72ZudXvn",
+   "tool_input": {
+    "command": "mkdir -p /tmp/plangen && cat > /tmp/plangen/gen.py <<'EOF'\nimport json, sys\nout = sys.argv[1]\n\ndef retry(body, tries=100):\n    # Run DDL that takes a strong lock on orders without queueing app traffic behind it:\n    # short lock_timeout, back off and retry.\n    return (\"DO $$ DECLARE n int := 0; BEGIN LOOP BEGIN \"\n            \"PERFORM set_config('lock_timeout', '200ms', true); \"\n            + body +\n            \" EXIT; EXCEPTION WHEN lock_not_available THEN n := n + 1; \"\n            f\"IF n >= {tries} THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$;\")\n\nsteps = []\nsteps.append({\"note\": \"Sync function: on insert fill whichever of amount/total is missing from the other; on update copy the changed one to the other.\",\n  \"sql\": \"CREATE OR REPLACE FUNCTION orders_sync_total() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN \"\n         \"IF TG_OP = 'INSERT' THEN \"\n         \"IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; \"\n         \"ELSE \"\n         \"IF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; \"\n         \"ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; END IF; \"\n         \"END IF; RETURN NEW; END $f$;\"})\nsteps.append({\"note\": \"Add nullable total (metadata-only) and the sync trigger in one transaction, so no row is inserted without total. Retries on lock timeout.\",\n  \"sql\": retry(\"ALTER TABLE orders ADD COLUMN total numeric(10,2); \"\n               \"CREATE TRIGGER orders_sync_total BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_total();\")})\n\nB = 50000\nstmts = [f\"UPDATE orders SET total = amount WHERE id >= {lo} AND id < {lo+B} AND total IS NULL;\" for lo in range(1, 10000001, B)]\nstmts.append(\"UPDATE orders SET total = amount WHERE id >= 10000001 AND total IS NULL;\")\nfor i in range(0, len(stmts), 20):\n    chunk = stmts[i:i+20]\n    steps.append({\"note\": f\"Backfill total from amount, {B} rows per autocommitted statement (batch {i//20+1} of {(len(stmts)+19)//20}).\",\n                  \"sql\": \" \".join(chunk)})\nsteps.append({\"note\": \"Clean up dead tuples from the backfill (non-blocking).\", \"sql\": \"VACUUM (ANALYZE) orders;\"})\n\nsteps.append({\"note\": \"NOT NULL without a long lock: add CHECK (total IS NOT NULL) NOT VALID (instant).\",\n  \"sql\": retry(\"ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID;\")})\nsteps.append({\"note\": \"Validate the check: full scan under SHARE UPDATE EXCLUSIVE, reads and writes keep going. Fails (and stops the plan) if any row lacks total.\",\n  \"sql\": \"ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;\"})\nsteps.append({\"note\": \"SET NOT NULL uses the validated check, so no scan; then drop the now-redundant check.\",\n  \"sql\": retry(\"ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_total_not_null;\")})\n\nsteps.append({\"note\": \"Switch the app to total. During the rollout old pods write amount and new pods write total; the trigger fills the other column either way.\",\n  \"deploy\": {\"AMOUNT_READ\": \"total\", \"AMOUNT_WRITE\": \"total\"}})\nsteps.append({\"note\": \"Let terminating old pods finish draining (3 s shutdown delay + in-flight requests).\", \"wait\": 15})\nsteps.append({\"note\": \"Confirm nothing is still using amount before dropping it: no session has a query mentioning amount.\",\n  \"sql\": \"DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() \"\n         \"AND state = 'active' AND query ~* '\\\\mamount\\\\M' AND query !~* 'pg_stat_activity') THEN RAISE EXCEPTION 'amount still in use'; END IF; END $$;\"})\nsteps.append({\"note\": \"Contract: drop the trigger and the amount column together, then the function.\",\n  \"sql\": retry(\"DROP TRIGGER orders_sync_total ON orders; ALTER TABLE orders DROP COLUMN amount;\") + \" DROP FUNCTION orders_sync_total();\"})\nsteps.append({\"note\": \"Verify the end state: total is numeric(10,2) NOT NULL, amount is gone.\",\n  \"sql\": \"DO $$ BEGIN \"\n         \"IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'total' \"\n         \"AND data_type = 'numeric' AND numeric_precision = 10 AND numeric_scale = 2 AND is_nullable = 'NO') THEN RAISE EXCEPTION 'total is not numeric(10,2) NOT NULL'; END IF; \"\n         \"IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'amount') THEN RAISE EXCEPTION 'amount still exists'; END IF; \"\n         \"END $$;\"})\n\njson.dump({\"task\": \"rename-amount\", \"steps\": steps}, open(out, \"w\"), indent=1)\nprint(len(steps), \"steps\")\nEOF\npython -I /tmp/plangen/gen.py \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace/plans/plain-rename-amount-3.json\"",
+    "description": "Generate the migration plan JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-rename-amount-3.json`. I haven't run it, and I couldn't check that the JSON parses because Bash was denied, so I wrote the file by hand. The app keeps working throughout. The plan adds the new column, copies the data across, switches the app over, then removes the old column:\n\n1. **Add `total` and a sync trigger.** `total` is added as a nullable `numeric(10,2)`, which is instant. In the same transaction, a trigger is created that fills in whichever of `amount`/`total` an insert leaves out, and keeps them equal on update. So every new row gets both columns, whichever one the app writes.\n2. **Copy `amount` into `total`.** This runs in batches of 50,000 rows, committing after each batch, so locks stay short. Then a plain `VACUUM` cleans up, which doesn't block the app.\n3. **Make `total` NOT NULL without a long lock.** First a `CHECK (total IS NOT NULL) NOT VALID` is added. The check is then validated, which scans the table but lets reads and writes continue. After that, `SET NOT NULL` doesn't need to scan, and the check is dropped.\n4. **Switch the app.** It deploys `AMOUNT_READ=total, AMOUNT_WRITE=total`. During the rolling update, old pods write `amount` and new pods write `total`, and the trigger fills in the other column. It then waits 15 s for the old pods to finish shutting down.\n5. **Remove the old column.** It stops if any session is still running a query that mentions `amount`. Otherwise it drops the trigger and `amount` together, removes the helper function, and checks the end state: `total` is `numeric(10,2) NOT NULL` and `amount` is gone.\n\nEvery step that needs a strong lock on `orders` uses a 200 ms lock timeout and retries, so app queries never wait behind it.\n\nThe copy in step 2 has to run as its own statement so it can commit between batches. If the runner wraps a step in a transaction, that step fails. The plan then stops with both columns in place and the app still on `amount`, so nothing breaks."
+}

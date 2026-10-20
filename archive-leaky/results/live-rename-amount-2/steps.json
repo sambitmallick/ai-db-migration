@@ -1,0 +1,50 @@
+[
+ {
+  "note": "Check the starting state: orders is a table with amount numeric(10,2) NOT NULL and no total yet. Changes nothing; stops the plan if the database is not in the expected state.",
+  "kind": "sql",
+  "start": 1792498124.4817157,
+  "end": 1792498124.9458387,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Metadata-only, in one transaction: rename the column amount -> total, rename the table orders -> orders_base, and put an auto-updatable view named orders in its place that exposes the column under BOTH names (amount and total). Old pods keep reading/inserting amount, new pods can use total, both land in the same column; no rows are rewritten. Short lock_timeout so app queries never queue long behind the lock; retried on lock timeout.",
+  "kind": "sql",
+  "start": 1792498124.9458387,
+  "end": 1792498125.3991513,
+  "ok": true,
+  "output": "10000738|667.18|667.18"
+ },
+ {
+  "note": "Roll the app over to the new name: read and write total (served by the view until the swap back).",
+  "kind": "deploy",
+  "start": 1792498125.3991513,
+  "end": 1792498129.4883533,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminated old pods finish draining their in-flight requests (3 s SIGTERM delay + shutdown) before amount disappears.",
+  "kind": "wait",
+  "start": 1792498129.4883533,
+  "end": 1792498149.4886298,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Metadata-only, in one transaction: drop the view and rename orders_base back to orders. orders is again the original table (same rows, same oid, indexes, sequence), with the column total numeric(10,2) NOT NULL and no amount column. Queries waiting on the lock re-resolve the name to the table. Retried on lock timeout.",
+  "kind": "sql",
+  "start": 1792498149.4886298,
+  "end": 1792498149.892179,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the end state: orders is a table, total is numeric(10,2) NOT NULL, amount is gone.",
+  "kind": "sql",
+  "start": 1792498149.892179,
+  "end": 1792498150.3141716,
+  "ok": true,
+  "output": ""
+ }
+]

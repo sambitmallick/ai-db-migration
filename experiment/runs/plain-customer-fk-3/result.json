@@ -1,0 +1,39 @@
+{
+ "run": "plain-customer-fk-3",
+ "task": "customer-fk",
+ "mode": "plain",
+ "prompt": "/migrate customer-fk plans/plain-customer-fk-3.json",
+ "seconds": 57,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/customer-fk/task.md && ls tasks/customer-fk plans && cat db/seed.sql && cat app/server.js && cat k8s/shop.yaml && cat scripts/db-ro.sh\", \"description\": \"Read task, schema, app, deployment\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"\\\\d customers\\\"; bash scripts/db-ro.sh \\\"SELECT count(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.id=o.customer_id);\\\" ; b"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-fk-3.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the foreign key as NOT VALID: from now on every inserted/updated order must reference an existing customer"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/plain-customer-fk-3.json'); console.log(p.task, p.steps.length)\\\"\", \"description\": \"Check the plan file is valid JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01UWHei2ZFF4u7xtt3tQKvKA",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/plain-customer-fk-3.json'); console.log(p.task, p.steps.length)\"",
+    "description": "Check the plan file is valid JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-customer-fk-3.json`. I couldn't run the check that the file parses as JSON because the permission was denied. I did check the strings by hand and there are no unescaped quotes.\n\n**What the plan does (3 SQL steps, no app deploy):**\n1. **Add the foreign key without checking old rows.** It adds `orders_customer_id_fkey` (`orders.customer_id` \u2192 `customers.id`) as `NOT VALID`, so new orders must point at a real customer but the 10M existing rows aren't scanned yet. This briefly locks both tables. Each try waits at most 300 ms for the lock and then retries, up to 30 times, so it never sits in a queue blocking the app's inserts, which time out after 2 s. If the key already exists, the step does nothing.\n2. **Check the existing rows.** `VALIDATE CONSTRAINT` scans all 10M orders. The lock it takes still lets the app read and insert during the scan, and the step turns off the statement timeout so the long scan isn't cut off.\n3. **Confirm the result.** It fails if the foreign key is missing or not fully checked.\n\nThe app doesn't need changing. The one difference is that an order for a customer who doesn't exist will now get a 500 error instead of being saved.\n\nOn the live database right now, every order points at an existing customer. If a bad order gets in before step 1 runs, step 2 will fail and the plan will stop there. New orders would still be checked; only the old rows wouldn't be confirmed.\n\nI didn't add an index on `orders.customer_id`. Without one, deleting or changing a customer's id has to scan all orders to check the key. The app never does either, so I left it out to keep this change small."
+}

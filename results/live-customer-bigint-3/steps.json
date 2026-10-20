@@ -1,0 +1,218 @@
+[
+ {
+  "note": "Trigger function that copies customer_id into the new bigint column on every insert/update. Touches no table.",
+  "kind": "sql",
+  "start": 1792510752.336433,
+  "end": 1792510752.7512932,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In ONE transaction: add nullable column customer_id_new bigint (metadata only, no rewrite), NOT VALID checks (not null, equal to customer_id) that already apply to new rows, and the sync trigger. lock_timeout 200ms + retry, so app queries never queue behind us for more than 200ms. If the lock is never obtained the step fails with nothing changed.",
+  "kind": "sql",
+  "start": 1792510752.7512932,
+  "end": 1792510753.174827,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [1, 1000001) in 5000-row batches, one commit per batch, short pause between batches. Row locks only on old rows the app never updates.",
+  "kind": "sql",
+  "start": 1792510753.174827,
+  "end": 1792510761.8174057,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum so the next batches reuse the space of the dead row versions (limits table bloat). No truncation, so no exclusive lock.",
+  "kind": "sql",
+  "start": 1792510761.8174057,
+  "end": 1792510762.9871023,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [1000001, 2000001).",
+  "kind": "sql",
+  "start": 1792510762.9871023,
+  "end": 1792510771.5359664,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510771.5359664,
+  "end": 1792510772.7776968,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [2000001, 3000001).",
+  "kind": "sql",
+  "start": 1792510772.7776968,
+  "end": 1792510781.4243515,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510781.4243515,
+  "end": 1792510782.4884892,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [3000001, 4000001).",
+  "kind": "sql",
+  "start": 1792510782.4884892,
+  "end": 1792510792.0831785,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510792.0831785,
+  "end": 1792510793.4042861,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [4000001, 5000001).",
+  "kind": "sql",
+  "start": 1792510793.4042861,
+  "end": 1792510801.950653,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510801.950653,
+  "end": 1792510803.0935872,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [5000001, 6000001).",
+  "kind": "sql",
+  "start": 1792510803.0935872,
+  "end": 1792510812.5745006,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510812.5745006,
+  "end": 1792510813.638076,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [6000001, 7000001).",
+  "kind": "sql",
+  "start": 1792510813.638076,
+  "end": 1792510822.1752818,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510822.1752818,
+  "end": 1792510823.2714052,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [7000001, 8000001).",
+  "kind": "sql",
+  "start": 1792510823.2714052,
+  "end": 1792510832.4982545,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510832.4982545,
+  "end": 1792510833.8760366,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [8000001, 9000001).",
+  "kind": "sql",
+  "start": 1792510833.8760366,
+  "end": 1792510844.780517,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792510844.780517,
+  "end": 1792510846.0755227,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids from 9000001 up to the current max(id). Orders inserted since the trigger was created already have the value and are skipped.",
+  "kind": "sql",
+  "start": 1792510846.0755227,
+  "end": 1792510857.7764714,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum and analyze, so the new column has planner statistics before it becomes customer_id.",
+  "kind": "sql",
+  "start": 1792510857.7764714,
+  "end": 1792510859.573983,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate 'customer_id_new IS NOT NULL'. Scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts. Fails (plan stops, app unaffected) if any row was missed.",
+  "kind": "sql",
+  "start": 1792510859.5761967,
+  "end": 1792510861.289731,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate 'customer_id_new = customer_id' on every row: proves every value was copied unchanged. Same non-blocking lock.",
+  "kind": "sql",
+  "start": 1792510861.289731,
+  "end": 1792510862.675338,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Swap, in ONE short transaction under ACCESS EXCLUSIVE (lock_timeout 200ms + retry): drop the trigger and the equality check, SET NOT NULL (no table scan, because the validated check already proves there are no NULLs), drop the now-redundant check, drop the old integer column, rename customer_id_new to customer_id. All metadata only, so the lock is held for milliseconds. Queued app queries then see customer_id as bigint NOT NULL; the app's SQL is unchanged, so no deploy is needed.",
+  "kind": "sql",
+  "start": 1792510862.675338,
+  "end": 1792510863.091489,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Remove the trigger function (no longer used).",
+  "kind": "sql",
+  "start": 1792510863.091489,
+  "end": 1792510863.4983573,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the result: orders.customer_id is bigint NOT NULL and has no NULLs.",
+  "kind": "sql",
+  "start": 1792510863.4983573,
+  "end": 1792510863.926221,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,162 @@
+[
+ {
+  "note": "Create the trigger function that keeps amount and total identical: on INSERT it fills whichever of the two the app did not write; on UPDATE it copies whichever side changed to the other. No table lock needed.",
+  "kind": "sql",
+  "start": 1792497700.6736965,
+  "end": 1792497701.115537,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Expand: add nullable column total (metadata-only, no rewrite) and the sync trigger in one transaction. The lock is taken with a 500 ms lock_timeout and retried, so app queries never queue behind it for long (app statement timeout is 2 s).",
+  "kind": "sql",
+  "start": 1792497701.1165557,
+  "end": 1792497701.558046,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [1, 2M) in batches of 20k, committing each batch (short row locks, the app never updates orders anyway).",
+  "kind": "sql",
+  "start": 1792497701.558046,
+  "end": 1792497719.5754259,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum so the dead row versions from the backfill are reused instead of growing the table.",
+  "kind": "sql",
+  "start": 1792497719.5754259,
+  "end": 1792497722.1596556,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [2M, 4M).",
+  "kind": "sql",
+  "start": 1792497722.1596556,
+  "end": 1792497739.8123887,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792497739.8123887,
+  "end": 1792497742.3228228,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [4M, 6M).",
+  "kind": "sql",
+  "start": 1792497742.3233423,
+  "end": 1792497759.8369696,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792497759.8369696,
+  "end": 1792497762.6258557,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [6M, 8M).",
+  "kind": "sql",
+  "start": 1792497762.6258557,
+  "end": 1792497780.8465216,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792497780.8465216,
+  "end": 1792497783.4109426,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids [8M, max(id)]: everything up to the current max, which covers any row inserted before the trigger existed (later rows are filled by the trigger).",
+  "kind": "sql",
+  "start": 1792497783.4109426,
+  "end": 1792497801.7131517,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum and refresh statistics.",
+  "kind": "sql",
+  "start": 1792497801.7131517,
+  "end": 1792497805.0676754,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check: every row has total equal to amount. Fails the plan (before any app change) if not.",
+  "kind": "sql",
+  "start": 1792497805.0676754,
+  "end": 1792497807.8097174,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "NOT NULL on total without a long lock, step 1: add CHECK (total IS NOT NULL) NOT VALID (brief lock, retried).",
+  "kind": "sql",
+  "start": 1792497807.8097174,
+  "end": 1792497808.2233253,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Step 2: validate the check. Takes only SHARE UPDATE EXCLUSIVE, so reads and inserts continue during the scan.",
+  "kind": "sql",
+  "start": 1792497808.2233253,
+  "end": 1792497809.8480725,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Step 3: SET NOT NULL uses the validated check and skips the table scan, so the lock is momentary; then drop the now-redundant check.",
+  "kind": "sql",
+  "start": 1792497809.8480725,
+  "end": 1792497810.269802,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Switch the app to total. During the rolling update old pods read/write amount and new pods read/write total; the trigger keeps both columns filled and equal for every insert.",
+  "kind": "deploy",
+  "start": 1792497810.269802,
+  "end": 1792497814.2106066,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let old pods that are still terminating finish their in-flight requests (they stop ~3-5 s after SIGTERM; grace period is 30 s).",
+  "kind": "wait",
+  "start": 1792497814.2106066,
+  "end": 1792497849.2113297,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Re-check consistency before dropping the old column.",
+  "kind": "sql",
+  "start": 1792497849.2113297,
+  "end": 1792497851.1695318,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Contract: drop the trigger and the amount column together in one short transaction (DROP COLUMN is metadata-only), then the function.",
+  "kind": "sql",
+  "start": 1792497851.1695318,
+  "end": 1792497851.594592,
+  "ok": true,
+  "output": ""
+ }
+]

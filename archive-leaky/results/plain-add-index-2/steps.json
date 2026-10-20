@@ -1,0 +1,34 @@
+[
+ {
+  "note": "If an INVALID orders_customer_id_idx is left over from an interrupted concurrent build, rename it out of the way (IF NOT EXISTS below would otherwise skip and leave an unusable index). A valid one is left alone.",
+  "kind": "sql",
+  "start": 1792493148.123669,
+  "end": 1792493148.3768733,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the leftover invalid index, if any, without blocking reads or writes. Alone in its step: CONCURRENTLY cannot run inside a transaction block.",
+  "kind": "sql",
+  "start": 1792493148.3768733,
+  "end": 1792493148.630989,
+  "ok": true,
+  "output": "NOTICE:  index \"orders_customer_id_idx_invalid\" does not exist, skipping"
+ },
+ {
+  "note": "Build the index concurrently: only a SHARE UPDATE EXCLUSIVE lock, so the app's inserts and reads (2 s timeout) keep running during the build on 10M rows. Alone in its step for the same reason.",
+  "kind": "sql",
+  "start": 1792493148.630989,
+  "end": 1792493155.5603054,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the index exists and is valid; fail the plan loudly otherwise.",
+  "kind": "sql",
+  "start": 1792493155.5603054,
+  "end": 1792493155.815396,
+  "ok": true,
+  "output": ""
+ }
+]

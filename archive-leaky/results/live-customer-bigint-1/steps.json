@@ -1,0 +1,218 @@
+[
+ {
+  "note": "Create the trigger function that copies customer_id into the new bigint column on every insert/update. Touches no table.",
+  "kind": "sql",
+  "start": 1792498873.4218621,
+  "end": 1792498873.7641838,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In one short transaction, retried with a 300ms lock_timeout so app queries never queue behind it for long: add the nullable bigint column customer_id_new (metadata-only, no rewrite), a NOT VALID check that it is not null (enforced for new rows only), and the sync trigger. From here on every new order fills both columns.",
+  "kind": "sql",
+  "start": 1792498873.7641838,
+  "end": 1792498874.0721655,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids below 1,000,000 in 100k-row autocommitted batches with short pauses. Row locks only (the app never updates orders), no table lock.",
+  "kind": "sql",
+  "start": 1792498874.0721655,
+  "end": 1792498883.645632,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM so the space of the old row versions is reused by the next batches (keeps the table from doubling in size). Does not block reads or writes.",
+  "kind": "sql",
+  "start": 1792498883.645632,
+  "end": 1792498884.8799138,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1,000,000 to 2,000,000.",
+  "kind": "sql",
+  "start": 1792498884.8799138,
+  "end": 1792498894.3661523,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498894.3661523,
+  "end": 1792498895.6536734,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,000,000 to 3,000,000.",
+  "kind": "sql",
+  "start": 1792498895.6536734,
+  "end": 1792498905.2723556,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498905.2723556,
+  "end": 1792498906.4553647,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 3,000,000 to 4,000,000.",
+  "kind": "sql",
+  "start": 1792498906.4553647,
+  "end": 1792498916.1285164,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498916.1285164,
+  "end": 1792498917.3193698,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4,000,000 to 5,000,000.",
+  "kind": "sql",
+  "start": 1792498917.3193698,
+  "end": 1792498926.83667,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498926.83667,
+  "end": 1792498928.1151187,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5,000,000 to 6,000,000.",
+  "kind": "sql",
+  "start": 1792498928.1151187,
+  "end": 1792498938.5586903,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498938.5586903,
+  "end": 1792498939.8856924,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6,000,000 to 7,000,000.",
+  "kind": "sql",
+  "start": 1792498939.8856924,
+  "end": 1792498949.9626088,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498949.9626088,
+  "end": 1792498951.391947,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7,000,000 to 8,000,000.",
+  "kind": "sql",
+  "start": 1792498951.391947,
+  "end": 1792498961.446801,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498961.446801,
+  "end": 1792498962.837455,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8,000,000 to 9,000,000.",
+  "kind": "sql",
+  "start": 1792498962.837455,
+  "end": 1792498972.271723,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498972.271723,
+  "end": 1792498973.310464,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids from 9,000,000 up. The last batch is open-ended, so it also covers every order inserted before the trigger existed, whatever the max id is by then.",
+  "kind": "sql",
+  "start": 1792498973.310464,
+  "end": 1792498980.8244338,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "VACUUM to reclaim old row versions.",
+  "kind": "sql",
+  "start": 1792498980.8244338,
+  "end": 1792498982.043072,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify before touching the live column: every row must have customer_id_new equal to customer_id. Fails the plan (nothing swapped yet, app unaffected) if any row differs.",
+  "kind": "sql",
+  "start": 1792498982.0440722,
+  "end": 1792498983.6480482,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the not-null check over all rows. Takes only a SHARE UPDATE EXCLUSIVE lock, so reads and writes continue.",
+  "kind": "sql",
+  "start": 1792498983.6480482,
+  "end": 1792498984.8323898,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Collect planner statistics for the new column (they stay with it through the rename), so the /customer query keeps its current plan.",
+  "kind": "sql",
+  "start": 1792498984.8323898,
+  "end": 1792498985.2548661,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Swap in one short transaction, retried with a 300ms lock_timeout: SET NOT NULL on customer_id_new (no scan, proven by the validated check), drop the check and the trigger, drop the old integer column (metadata-only, no rewrite), rename customer_id_new to customer_id. The app's SQL is unchanged and uses the bigint column from its next query.",
+  "kind": "sql",
+  "start": 1792498985.2548661,
+  "end": 1792498985.5055573,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the now unused trigger function and check the result: orders.customer_id is bigint NOT NULL.",
+  "kind": "sql",
+  "start": 1792498985.5055573,
+  "end": 1792498985.7795265,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,74 @@
+[
+ {
+  "note": "Trigger function that copies customer_id into the new bigint column on every insert and update. Creating it takes no lock on orders.",
+  "kind": "sql",
+  "start": 1792510280.6373103,
+  "end": 1792510281.0373604,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In one short transaction: add the nullable bigint column (metadata only, no rewrite), the sync trigger, and two NOT VALID checks (new column not null, new column = old column) that are enforced on every new write from now on. The ACCESS EXCLUSIVE lock is taken with a 100 ms lock_timeout and retried, so app queries never queue behind it for more than 100 ms.",
+  "kind": "sql",
+  "start": 1792510281.0373604,
+  "end": 1792510281.4290466,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill procedure: copies customer_id into customer_id_new in id ranges of 50,000 rows, committing after each batch and pausing briefly, so locks are only row locks (the app never updates orders) and each transaction is short. Every row that existed before the trigger has id <= max(id) read here.",
+  "kind": "sql",
+  "start": 1792510281.4290466,
+  "end": 1792510281.7967396,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Run the backfill (sole statement in the step so the procedure can COMMIT between batches).",
+  "kind": "sql",
+  "start": 1792510281.7967396,
+  "end": 1792510361.6372204,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Reclaim the dead row versions left by the backfill and collect planner statistics for customer_id_new (they stay with the column after the rename, so the /customer query plan doesn't change). Manual VACUUM takes SHARE UPDATE EXCLUSIVE, which does not block reads or writes, and leaves no backlog for autovacuum to hold a lock during the swap.",
+  "kind": "sql",
+  "start": 1792510361.6372204,
+  "end": 1792510377.1193464,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate both checks over all 10M rows: proves every row has customer_id_new NOT NULL and equal to customer_id. SHARE UPDATE EXCLUSIVE lock only, so traffic continues. If any row differed, this fails and the plan stops with nothing dropped.",
+  "kind": "sql",
+  "start": 1792510377.1193464,
+  "end": 1792510380.6702785,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Swap in one short transaction (same 100 ms lock_timeout + retry): SET NOT NULL is instant because the validated check already proves no NULLs; then drop the trigger and checks, drop the old integer column (its values are proven identical), and rename customer_id_new to customer_id. All catalog-only changes; the app's SQL keeps working unchanged.",
+  "kind": "sql",
+  "start": 1792510380.6702785,
+  "end": 1792510381.0497055,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Remove the helper function and procedure.",
+  "kind": "sql",
+  "start": 1792510381.0497055,
+  "end": 1792510381.4872546,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the result: orders.customer_id is bigint NOT NULL, the helper column is gone.",
+  "kind": "sql",
+  "start": 1792510381.4872546,
+  "end": 1792510381.9176998,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,10 @@
+{
+ "task": "customer-bigint",
+ "by": "control (naive)",
+ "steps": [
+  {
+   "note": "ALTER COLUMN TYPE bigint (rewrites the table under an exclusive lock)",
+   "sql": "ALTER TABLE orders ALTER COLUMN customer_id TYPE bigint;"
+  }
+ ]
+}

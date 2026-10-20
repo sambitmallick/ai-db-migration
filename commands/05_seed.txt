@@ -1,0 +1,6 @@
+$ bash scripts/seed.sh
+NOTICE:  schema "audit" does not exist, skipping
+ERROR:  integer out of range
+command terminated with exit code 3
+orders: 0, guest orders (email NULL): 0, table size: 2056 kB
+[exit 0, 2s]

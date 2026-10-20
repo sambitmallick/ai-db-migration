@@ -1,0 +1,18 @@
+[
+ {
+  "note": "fill the NULLs",
+  "kind": "sql",
+  "start": 1792489376.1814597,
+  "end": 1792489393.9895136,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL",
+  "kind": "sql",
+  "start": 1792489393.9895136,
+  "end": 1792489400.1383207,
+  "ok": false,
+  "output": "ERROR:  column \"email\" of relation \"orders\" contains null values\ncommand terminated with exit code 3"
+ }
+]

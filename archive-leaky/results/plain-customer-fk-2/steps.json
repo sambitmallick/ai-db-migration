@@ -1,0 +1,34 @@
+[
+ {
+  "note": "Pre-check: stop before changing anything if any order points at a missing customer (seed data has none). Read-only scan, no locks that block the app.",
+  "kind": "sql",
+  "start": 1792496567.6596444,
+  "end": 1792496570.2285898,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add the FK as NOT VALID: no table scan, so the SHARE ROW EXCLUSIVE lock on orders/customers is held for milliseconds. lock_timeout 300ms + retry so app inserts never queue behind us for long. From here on every new/updated order is checked. Skips if the constraint already exists.",
+  "kind": "sql",
+  "start": 1792496570.2349133,
+  "end": 1792496570.5630348,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing 10M rows. VALIDATE CONSTRAINT takes only SHARE UPDATE EXCLUSIVE on orders (and ROW SHARE on customers), so app reads and inserts keep running during the scan. No-op if already valid.",
+  "kind": "sql",
+  "start": 1792496570.5630348,
+  "end": 1792496572.5159767,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify: the FK exists, references customers(id) and is validated; fail the plan otherwise.",
+  "kind": "sql",
+  "start": 1792496572.5159767,
+  "end": 1792496572.8134437,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,46 @@
+{
+ "run": "live-add-index-3",
+ "task": "add-index",
+ "mode": "live",
+ "prompt": "/migrate add-index plans/live-add-index-3.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 70,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 2,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT indexrelid::regclass, indisvalid, indisready, pg_get_indexdef(indexrelid) FROM pg_index WHERE indrelid='orders'::regclass;\\\" && bash scripts/db-ro.sh \\\"SELECT pid, state, xact_sta"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"EXPLAIN (ANALYZE, BUFFERS) SELECT id, amount FROM orders WHERE customer_id = 123 ORDER BY id DESC LIMIT 10;\\\" && bash scripts/db-ro.sh \\\"SELECT c.relname, n.nspname, c.relkind, pg_size_p"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls harness scripts plans; cat scripts/db-ro.sh; ls tasks\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT r.rolname, r.rolsuper, s.setconfig, d.datname FROM pg_roles r LEFT JOIN pg_db_role_setting s ON s.setrole=r.oid LEFT JOIN pg_database d ON d.oid=s.setdatabase WHERE r.rolname NOT "
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-add-index-3.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Build the index without blocking reads or writes. CONCURRENTLY only takes a SHARE UPDATE EXCLUSIVE lock, so the app"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/live-add-index-3.json`. I haven't run it.\n\n**The index already exists on the live database.** `orders_customer_id_idx` on `(customer_id, id)` is already there, it's valid, and Postgres uses it: `EXPLAIN ANALYZE` shows the customer-page query taking about 2.7 ms with no full-table scan. `db/seed.sql` doesn't create this index, so it was probably left over from an earlier run.\n\n**What the plan does:**\n1. **Builds the index in the background:** `CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id, id);`\n   - Building it this way doesn't block the app's reads or writes, and it doesn't touch any rows. If the database has been reset from `seed.sql`, it builds the index (the table is 751 MB) while the shop keeps serving traffic.\n   - On the database as it is now, it does nothing.\n   - The columns are `(customer_id, id)`, not just `customer_id`, so the \"last 10 orders\" query reads 10 index entries and doesn't need to sort. The existing index uses the same columns.\n2. **Checks the result:** the index must exist, be valid, and start with `customer_id`. A background build that fails leaves a broken index behind, and step 1 would then skip it without saying so. This step makes the plan stop with an error instead.\n\nThere are no app deploys and no data changes.\n\nThe build runs as a single statement on its own, with no timeout set. I'm assuming the plan connects as the `postgres` user the app uses, which has no statement timeout. I can't see what the runner connects as, so if it uses a role that has one, a fresh build could time out on the 10M-row table. Step 2 would then stop the plan."
+}

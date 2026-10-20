@@ -1,0 +1,71 @@
+{
+ "run": "plain-rename-amount-2",
+ "task": "rename-amount",
+ "mode": "plain",
+ "prompt": "/migrate rename-amount plans/plain-rename-amount-2.json",
+ "seconds": 169,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 15,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\rename-amount\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls plans tasks harness scripts; cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"\\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema','pg_toast')\\"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select attnum, attname, attisdropped, attnotnull from pg_attribute where attrelid='orders'::regclass and attnum>0 order by attnum\\\"; bash scripts/db-ro.sh \\\"\\\\d audit.*\\\"; bash scripts/db-ro.sh \\\"select count(*) from audit.snap\\\"; bash scripts/db-ro.sh \\\"select c"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select attnum, attname, attisdropped, attnotnull from pg_attribute where attrelid='orders'::regclass and attnum>0 order by attnum\\\"; bash scripts/db-ro.sh \\\"select tgname, tgrelid::regclass from pg_trigger where not tgisinternal\\\"; bash scripts/db-ro.sh \\\"select "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version(), current_setting('statement_timeout'), current_setting('lock_timeout'), pg_size_pretty(pg_table_size('orders'))\\\"; bash scripts/db-ro.sh \\\"select conname, contype, pg_get_constraintdef(oid) from pg_constraint where conrelid='orders'::regclass\\\"; "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node - <<'EOF'\\nconst fs = require(\\\"fs\\\");\\n// Run DDL under a short lock_timeout, retrying, so a waiting ACCESS EXCLUSIVE lock never queues app queries for long.\\nconst locked = (ddl) =>\\n  \\\"SET lock_timeout = '300ms'; DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN \\\" + ddl +\\n  \\\" RETURN; E"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-rename-amount-2.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Expand: add nullable total (metadata only, no rewrite) and drop NOT NULL from amount so the app can later "
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01GxaL2RWf48EZAGEQvLG1fZ",
+   "tool_input": {
+    "command": "bash scripts/db-ro.sh \"select attnum, attname, attisdropped, attnotnull from pg_attribute where attrelid='orders'::regclass and attnum>0 order by attnum\"; bash scripts/db-ro.sh \"\\d audit.*\"; bash scripts/db-ro.sh \"select count(*) from audit.snap\"; bash scripts/db-ro.sh \"select count(*) from audit.written\"; bash scripts/db-ro.sh \"select tgname, tgrelid::regclass from pg_trigger where not tgisinternal\"; bash scripts/db-ro.sh \"select max(id), count(*) from orders\"; kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}'; echo; kubectl get pods",
+    "description": "Inspect column history, audit tables, triggers, deployment"
+   }
+  },
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01PCYQS9MgjgJJ3Lisz19Kz9",
+   "tool_input": {
+    "command": "node - <<'EOF'\nconst fs = require(\"fs\");\n// Run DDL under a short lock_timeout, retrying, so a waiting ACCESS EXCLUSIVE lock never queues app queries for long.\nconst locked = (ddl) =>\n  \"SET lock_timeout = '300ms'; DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN \" + ddl +\n  \" RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.2 + random() * 0.5); END; END LOOP; \" +\n  \"RAISE EXCEPTION 'could not lock orders'; END $$;\";\nconst env = (read, write) => ({ AMOUNT_READ: read, AMOUNT_WRITE: write, GUEST_EMAIL: \"null\" });\nconst B = 50000, MAX = 10000000;\nlet backfill = \"SET statement_timeout = 0; SET lock_timeout = '5s';\";\nfor (let lo = 0; lo < MAX; lo += B)\n  backfill += ` UPDATE orders SET total = amount WHERE id > ${lo} AND id <= ${lo + B} AND total IS NULL;`;\nbackfill += ` UPDATE orders SET total = amount WHERE id > ${MAX} AND total IS NULL;`;\nconst plan = { task: \"rename-amount\", steps: [\n  { note: \"Expand: add nullable total (metadata only); drop NOT NULL from amount so the app can later stop writing it.\",\n    sql: locked(\"ALTER TABLE orders ADD COLUMN total numeric(10,2), ALTER COLUMN amount DROP NOT NULL;\") },\n  { note: \"App writes both amount and total, still reads amount.\", deploy: env(\"amount\", \"amount,total\") },\n  { note: \"Let terminating old pods finish in-flight requests (3 s drain + 2 s statement timeout).\", wait: 10 },\n  { note: \"Backfill total = amount in 50k-row primary-key ranges, each its own short transaction; then rows inserted since the seed.\",\n    sql: backfill },\n  { note: \"Make total NOT NULL without a long ACCESS EXCLUSIVE scan: NOT VALID check, validate under a non-blocking lock.\",\n    sql: locked(\"ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID;\") +\n         \" SET statement_timeout = 0; SET lock_timeout = '5s'; ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;\" },\n  { note: \"SET NOT NULL uses the validated check (no scan), then the helper check is dropped.\",\n    sql: locked(\"ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_total_not_null;\") },\n  { note: \"App reads total, still writes both (old pods reading amount stay correct during the rollout).\", deploy: env(\"total\", \"amount,total\") },\n  { note: \"Drain old pods.\", wait: 10 },\n  { note: \"App reads and writes total only.\", deploy: env(\"total\", \"total\") },\n  { note: \"Drain old pods so nothing still writes amount.\", wait: 10 },\n  { note: \"Contract: drop amount (metadata only).\", sql: locked(\"ALTER TABLE orders DROP COLUMN amount;\") },\n  { note: \"Reclaim the dead tuples left by the backfill (plain VACUUM, does not block the app).\",\n    sql: \"SET statement_timeout = 0; VACUUM (ANALYZE) orders;\" },\n]};\nfs.writeFileSync(\"plans/plain-rename-amount-2.json\", JSON.stringify(plan, null, 2) + \"\\n\");\nconsole.log(plan.steps.length, \"steps;\", backfill.split(\"UPDATE\").length - 1, \"update batches\");\nEOF",
+    "description": "Generate the migration plan JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-rename-amount-2.json`. It hasn't been run. I also couldn't check that the JSON parses, because running a script was blocked.\n\nThe plan renames the column in stages (expand and contract) so the app keeps working throughout:\n\n1. **Add the new column:** adds `total` as a nullable column and drops `NOT NULL` from `amount`. These are quick catalog changes that don't rewrite the table.\n2. **Write both:** deploys the app writing `amount,total` and still reading `amount`, then waits 10s for old pods to drain.\n3. **Copy the data:** fills in `total = amount` in 100 batches of 100k rows by id, each committed on its own. A final pass covers rows added after the seed.\n4. **Make `total` NOT NULL without blocking the app:** it adds a `CHECK (total IS NOT NULL) NOT VALID` and validates it, which doesn't block reads or inserts. Then `SET NOT NULL` uses that check instead of scanning the table, and the check is dropped. If any row was missed, validation fails and the plan stops there.\n5. **Read `total`:** deploys reading `total` while still writing both. This keeps old pods that still read `amount` correct during the rollout. Then it waits.\n6. **Write only `total`:** deploys writing only `total`, then waits.\n7. **Remove `amount`:** drops the column, then runs a non-blocking `VACUUM (ANALYZE)` to clean up after the copy.\n\nEach schema change uses a 300ms `lock_timeout` and retries. Without that, a change waiting for its lock behind the slow `/customer` query would hold up all the app's queries.\n\n**The live database is already in the finished state:** `orders` has `total NOT NULL` and `amount` is already dropped, so an earlier run apparently left it migrated. I wrote the plan for the state in `seed.sql`, which says the database is reset before every migration. If it runs against the database as it is now, step 1 fails because `total` already exists, and the plan stops before any deploy."
+}

@@ -1,0 +1,138 @@
+[
+ {
+  "note": "Deploy the app so guest orders store '' instead of NULL (valid both before and after the migration). Waits for the rolling update.",
+  "kind": "deploy",
+  "start": 1792500387.7132258,
+  "end": 1792500391.3757648,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminated old pods finish their in-flight requests (they drain for ~3 s) so no more NULL emails are written.",
+  "kind": "wait",
+  "start": 1792500391.3757648,
+  "end": 1792500406.3763533,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1..1,000,000: NULL email -> ''. 100k ids per statement, each its own short transaction; only row locks, which the app (insert/select only) never waits on.",
+  "kind": "sql",
+  "start": 1792500406.3763533,
+  "end": 1792500408.179867,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1,000,001..2,000,000.",
+  "kind": "sql",
+  "start": 1792500408.179867,
+  "end": 1792500410.0185776,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,000,001..3,000,000.",
+  "kind": "sql",
+  "start": 1792500410.0185776,
+  "end": 1792500411.822451,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 3,000,001..4,000,000.",
+  "kind": "sql",
+  "start": 1792500411.822451,
+  "end": 1792500414.3716311,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4,000,001..5,000,000.",
+  "kind": "sql",
+  "start": 1792500414.3716311,
+  "end": 1792500416.769446,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5,000,001..6,000,000.",
+  "kind": "sql",
+  "start": 1792500416.769446,
+  "end": 1792500418.675519,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6,000,001..7,000,000.",
+  "kind": "sql",
+  "start": 1792500418.675519,
+  "end": 1792500420.3748813,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7,000,001..8,000,000.",
+  "kind": "sql",
+  "start": 1792500420.3748813,
+  "end": 1792500424.4412866,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8,000,001..9,000,000.",
+  "kind": "sql",
+  "start": 1792500424.4412866,
+  "end": 1792500428.6527362,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 9,000,001..10,000,000 and every newer order (written during the rollout).",
+  "kind": "sql",
+  "start": 1792500428.6527362,
+  "end": 1792500430.7587268,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID: catalog-only, no table scan, but needs a brief ACCESS EXCLUSIVE lock. Waits at most 300 ms per try (app queries queued behind it stay well under their 2 s timeout, even the ~1 s /customer read) and retries until there is a gap. From here on no NULL email can be inserted.",
+  "kind": "sql",
+  "start": 1792500430.7587268,
+  "end": 1792500431.019089,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Safety net: set '' on any NULL email still left (e.g. written by an old pod during the rollout). Normally 0 rows; a sequential scan holding only row locks.",
+  "kind": "sql",
+  "start": 1792500431.019089,
+  "end": 1792500436.0900197,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block the app's reads or inserts.",
+  "kind": "sql",
+  "start": 1792500436.0900197,
+  "end": 1792500437.3497143,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL: skips the full-table scan because the validated check constraint already proves there are no NULLs; then drop the now-redundant check. Same short-lock-with-retry pattern.",
+  "kind": "sql",
+  "start": 1792500437.3497143,
+  "end": 1792500437.679404,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check: orders.email is NOT NULL (fails the plan otherwise).",
+  "kind": "sql",
+  "start": 1792500437.679404,
+  "end": 1792500437.9363382,
+  "ok": true,
+  "output": ""
+ }
+]

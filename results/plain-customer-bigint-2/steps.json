@@ -1,0 +1,66 @@
+[
+ {
+  "note": "Trigger function that copies customer_id into the new bigint column on every insert/update. Touches no table, takes no lock on orders.",
+  "kind": "sql",
+  "start": 1792505192.7759063,
+  "end": 1792505193.0324194,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add nullable column customer_id_new bigint (metadata only, no rewrite) and the sync trigger, in one transaction. Locks are taken with a short lock_timeout and retried, so app queries never queue behind us for more than a few hundred ms.",
+  "kind": "sql",
+  "start": 1792505193.0324194,
+  "end": 1792505193.2755938,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill existing rows in batches of 20,000 ids, committing each batch (short row locks, no table lock; the app never updates orders). Every row inserted from now on is filled by the trigger.",
+  "kind": "sql",
+  "start": 1792505193.2755938,
+  "end": 1792505246.9623802,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Clean up the dead tuples left by the backfill (plain VACUUM, does not block reads or writes).",
+  "kind": "sql",
+  "start": 1792505246.9623802,
+  "end": 1792505260.0347435,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Prove the new column is NOT NULL without a long lock: add a NOT VALID check (brief lock, retried), then VALIDATE it (scans under SHARE UPDATE EXCLUSIVE, which does not block the app).",
+  "kind": "sql",
+  "start": 1792505260.0347435,
+  "end": 1792505261.64508,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Safety check: stop the plan if any row's new value differs from the old one.",
+  "kind": "sql",
+  "start": 1792505261.64508,
+  "end": 1792505263.8798122,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Swap in one short transaction (lock retried): SET NOT NULL (no scan, the validated check proves it), drop the check and the trigger, drop the old integer column, rename customer_id_new to customer_id. All metadata-only. The app keeps using the name customer_id, so no deploy is needed.",
+  "kind": "sql",
+  "start": 1792505263.8798122,
+  "end": 1792505264.1431756,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify: orders.customer_id is bigint NOT NULL.",
+  "kind": "sql",
+  "start": 1792505264.1454937,
+  "end": 1792505264.7013152,
+  "ok": true,
+  "output": ""
+ }
+]

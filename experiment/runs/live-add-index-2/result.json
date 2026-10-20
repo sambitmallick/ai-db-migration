@@ -1,0 +1,46 @@
+{
+ "run": "live-add-index-2",
+ "task": "add-index",
+ "mode": "live",
+ "prompt": "/migrate add-index plans/live-add-index-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 54,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 2,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; ls plans; bash scripts/db-ro.sh \\\"SELECT c.relname, i.indisvalid, i.indisready, pg_get_indexdef(i.indexrelid) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE i.indrelid IN ('or"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT version();\\\" && bash scripts/db-ro.sh \\\"SELECT pid, usename, state, xact_start, now()-xact_start AS age, backend_xmin, left(query,80) q FROM pg_stat_activity WHERE pid<>pg_backend"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls harness scripts k8s; grep -rn \\\"psql\\\" harness scripts | head -30\", \"description\": \"Find how plan SQL is executed\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT r.rolname, d.datname, s.setconfig FROM pg_db_role_setting s LEFT JOIN pg_roles r ON r.oid=s.setrole LEFT JOIN pg_database d ON d.oid=s.setdatabase;\\\" && bash scripts/db-ro.sh \\\"SE"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-add-index-2.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Build the index without blocking writes. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so inserts and read"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/live-add-index-2.json`. It has two steps:\n\n1. **Build the index:** `CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id);`, alone in its own step, because a concurrent build can't run inside a transaction block.\n   - `CONCURRENTLY` lets reads and inserts carry on during the build. A plain `CREATE INDEX` would block inserts while it indexes all 10M rows (751 MB), and at 60 requests a second those inserts would hit the app's 2-second timeout and fail.\n   - The index takes a while to build, but nothing waits on it. There is no `statement_timeout` set for the server or the database, so the build won't be cut off.\n2. **Check the result:** confirm the index exists and is valid. If it isn't, the plan stops with an error. A failed concurrent build leaves a broken index that has to be removed with `DROP INDEX CONCURRENTLY` before trying again.\n\nThis is safe for live traffic and the data:\n- **No data changes:** the plan only adds an index. No rows or columns change.\n- **No app redeploy:** the customer page query (`WHERE customer_id = $1 ORDER BY id DESC LIMIT 10`) uses the new index as it is.\n- **Nothing in the way:** I checked the live database first. There's no leftover broken index, no locks on `orders`, and no stuck prepared transactions.\n\nThe index is on `customer_id` alone, as the task asks. That's enough here because each customer has about 200 orders, which are quick to sort."
+}

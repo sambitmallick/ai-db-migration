@@ -1,0 +1,6 @@
+$ kubectl apply -f k8s/postgres.yaml && kubectl rollout status deployment/postgres --timeout=180s
+service/postgres created
+deployment.apps/postgres created
+Waiting for deployment "postgres" rollout to finish: 0 of 1 updated replicas are available...
+deployment "postgres" successfully rolled out
+[exit 0, 8s]

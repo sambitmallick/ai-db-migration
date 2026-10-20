@@ -1,0 +1,50 @@
+[
+ {
+  "note": "Compatibility layer, no data touched: in one short transaction rename the table orders -> orders_base and put an auto-updatable view named orders in its place that exposes the column both as amount and as total (same base column). Old app replicas (amount) and new ones (total) both keep working through the view. The ACCESS EXCLUSIVE lock is taken with a 150ms lock_timeout and retried, so live queries are never queued behind us for long.",
+  "kind": "sql",
+  "start": 1792509479.7695403,
+  "end": 1792509480.1570606,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the view works for reads by both names before switching the app.",
+  "kind": "sql",
+  "start": 1792509480.1570606,
+  "end": 1792509480.537601,
+  "ok": true,
+  "output": "10000695|670.19|670.19"
+ },
+ {
+  "note": "Rolling update: the app now reads and writes total (via the view). Old and new replicas can run side by side.",
+  "kind": "deploy",
+  "start": 1792509480.537601,
+  "end": 1792509484.5938232,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods (which still use amount) finish draining (3s drain + in-flight, 30s grace period) before amount disappears.",
+  "kind": "wait",
+  "start": 1792509484.5938232,
+  "end": 1792509524.5941632,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Final switch, no data touched: in one short transaction drop the view, rename orders_base back to orders and rename its column amount -> total (metadata only: same type, NOT NULL, same data, same pkey/sequence). Same short lock_timeout + retry. Lock on the view first (it propagates to the base table), the same order live queries use.",
+  "kind": "sql",
+  "start": 1792509524.5941632,
+  "end": 1792509524.984885,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the end state: orders is a table again, total is numeric(10,2) NOT NULL, amount is gone, no leftover view/table.",
+  "kind": "sql",
+  "start": 1792509524.984885,
+  "end": 1792509525.3853726,
+  "ok": true,
+  "output": "10002024|838.66"
+ }
+]

@@ -1,0 +1,36 @@
+{"task": "rename-amount", "steps": [
+  {"note": "Sync function: on insert, fill whichever of amount/total is missing from the other; on update, copy the changed one to the other.",
+   "sql": "CREATE OR REPLACE FUNCTION orders_sync_total() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF TG_OP = 'INSERT' THEN IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; ELSE IF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; END IF; END IF; RETURN NEW; END $f$;"},
+
+  {"note": "Add nullable total (metadata-only, no rewrite) and the sync trigger in one transaction, so no row is ever inserted without total. Short lock_timeout with retries so app queries never queue behind the ACCESS EXCLUSIVE lock.",
+   "sql": "DO $$ DECLARE n int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD COLUMN total numeric(10,2); CREATE TRIGGER orders_sync_total BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_total(); EXIT; EXCEPTION WHEN lock_not_available THEN n := n + 1; IF n >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$;"},
+
+  {"note": "Backfill procedure: copies amount to total in 50,000-row id ranges, committing after each batch (short row locks, no long transaction). Every row above the max id it sees was inserted with the trigger in place.",
+   "sql": "CREATE OR REPLACE PROCEDURE orders_backfill_total() LANGUAGE plpgsql AS $p$ DECLARE lo bigint := 0; hi bigint; BEGIN SELECT max(id) INTO hi FROM orders; WHILE lo < hi LOOP UPDATE orders SET total = amount WHERE id > lo AND id <= lo + 50000 AND total IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $p$;"},
+  {"note": "Run the backfill (on its own so the procedure can COMMIT between batches).",
+   "sql": "CALL orders_backfill_total();"},
+  {"note": "Drop the backfill procedure.",
+   "sql": "DROP PROCEDURE orders_backfill_total();"},
+  {"note": "Clean up the dead tuples from the backfill (plain VACUUM does not block reads or writes).",
+   "sql": "VACUUM (ANALYZE) orders;"},
+
+  {"note": "NOT NULL without a long lock, part 1: add CHECK (total IS NOT NULL) NOT VALID (instant, retried on lock timeout).",
+   "sql": "DO $$ DECLARE n int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID; EXIT; EXCEPTION WHEN lock_not_available THEN n := n + 1; IF n >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$;"},
+  {"note": "Part 2: validate the check. Full scan under SHARE UPDATE EXCLUSIVE, so reads and writes keep going. Fails (and stops the plan, in a safe state) if any row still lacks total.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;"},
+  {"note": "Part 3: SET NOT NULL uses the validated check and skips the scan; then drop the now-redundant check. Retried on lock timeout.",
+   "sql": "DO $$ DECLARE n int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_total_not_null; EXIT; EXCEPTION WHEN lock_not_available THEN n := n + 1; IF n >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$;"},
+
+  {"note": "Switch the app to total. During the rolling update, old pods write amount and new pods write total; the trigger fills in the other column either way, and every row already has both.",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total"}},
+  {"note": "Let terminating old pods finish draining (3 s shutdown delay plus in-flight requests) before amount goes away.",
+   "wait": 15},
+  {"note": "Safety check: stop here if any other session is still running a query that mentions amount.",
+   "sql": "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND state = 'active' AND query ILIKE '%amount%') THEN RAISE EXCEPTION 'amount is still in use'; END IF; END $$;"},
+
+  {"note": "Contract: drop the trigger and the amount column in one transaction (retried on lock timeout), then the sync function.",
+   "sql": "DO $$ DECLARE n int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); DROP TRIGGER orders_sync_total ON orders; ALTER TABLE orders DROP COLUMN amount; EXIT; EXCEPTION WHEN lock_not_available THEN n := n + 1; IF n >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$; DROP FUNCTION orders_sync_total();"},
+
+  {"note": "Verify the end state: total is numeric(10,2) NOT NULL and amount is gone.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'total' AND data_type = 'numeric' AND numeric_precision = 10 AND numeric_scale = 2 AND is_nullable = 'NO') THEN RAISE EXCEPTION 'total is not numeric(10,2) NOT NULL'; END IF; IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'amount') THEN RAISE EXCEPTION 'amount still exists'; END IF; END $$;"}
+]}

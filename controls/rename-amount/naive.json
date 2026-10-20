@@ -1,0 +1,17 @@
+{
+ "task": "rename-amount",
+ "by": "control (naive)",
+ "steps": [
+  {
+   "note": "rename the column",
+   "sql": "ALTER TABLE orders RENAME COLUMN amount TO total;"
+  },
+  {
+   "note": "roll out the app on the new name",
+   "deploy": {
+    "AMOUNT_READ": "total",
+    "AMOUNT_WRITE": "total"
+   }
+  }
+ ]
+}

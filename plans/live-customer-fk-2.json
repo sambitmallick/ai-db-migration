@@ -1,0 +1,8 @@
+{"task": "customer-fk", "steps": [
+  {"note": "Add the foreign key as NOT VALID: new and updated orders are checked from now on, existing rows are not scanned. It needs a brief SHARE ROW EXCLUSIVE lock on orders and customers (blocks inserts, not reads), so take it with a short lock_timeout and retry, so a queued ALTER never stalls inserts for more than 200 ms.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOOP BEGIN ALTER TABLE orders ADD CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES customers (id) NOT VALID; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"},
+  {"note": "Validate the existing 10M rows. VALIDATE takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so reads and inserts carry on while it scans. No statement timeout for this long scan.",
+   "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_fkey;"},
+  {"note": "Check that the constraint exists and is validated; fail the plan otherwise.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_customer_id_fkey' AND conrelid = 'orders'::regclass AND contype = 'f' AND convalidated) THEN RAISE EXCEPTION 'orders_customer_id_fkey missing or not validated'; END IF; END $$;"}
+]}

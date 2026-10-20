@@ -1,0 +1,11 @@
+$ kind delete cluster --name dbmig && rm -f shop-db.tar postgres.tar && kind get clusters; podman machine stop
+using podman due to KIND_EXPERIMENTAL_PROVIDER
+enabling experimental podman provider
+Deleting cluster "dbmig" ...
+Deleted nodes: ["dbmig-control-plane"]
+using podman due to KIND_EXPERIMENTAL_PROVIDER
+enabling experimental podman provider
+nightshift
+upgrade
+Machine "podman-machine-default" stopped successfully
+[exit 0, 18s]

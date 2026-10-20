@@ -1,0 +1,12 @@
+$ bash experiment/run_controls.sh
+[14:59:03] RESULT control-add-index-naive: plan completed in 5.2s | during: 87/319 failed, p99 3003 ms | after: 0/1842 failed | lock waiters max 24, longest wait 1.99s | checks 5/5 []
+[15:01:13] RESULT control-add-index-safe: plan completed in 7.3s | during: 0/454 failed, p99 106 ms | after: 0/1844 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[15:03:09] RESULT control-rename-amount-naive: plan completed in 3.5s | during: 204/215 failed, p99 20 ms | after: 1646/1849 failed | lock waiters max 0, longest wait 0.0s | checks 7/7 []
+[15:06:28] RESULT control-rename-amount-safe: plan completed in 68.2s | during: 15/4203 failed, p99 298 ms | after: 1479/1849 failed | lock waiters max 14, longest wait 0.21s | checks 7/7 []
+[15:08:40] RESULT control-customer-bigint-naive: plan completed in 13.1s | during: 643/811 failed, p99 3003 ms | after: 0/1843 failed | lock waiters max 24, longest wait 1.99s | checks 4/4 []
+[15:11:46] RESULT control-customer-bigint-safe: plan completed in 71.6s | during: 2/4408 failed, p99 167 ms | after: 0/1843 failed | lock waiters max 4, longest wait 0.09s | checks 4/4 []
+[15:14:04] RESULT control-email-not-null-naive: plan STOPPED at step 2 in 24.0s | during: 242/1477 failed, p99 3003 ms | after: 0/1844 failed | lock waiters max 24, longest wait 1.99s | checks 3/5 ['orders.email is NOT NULL', 'guest orders placed during the migration were stored, with an empty email']
+[15:16:38] RESULT control-email-not-null-safe: plan completed in 36.8s | during: 7/2262 failed, p99 503 ms | after: 0/1847 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[15:18:40] RESULT control-customer-fk-naive: plan completed in 2.7s | during: 9/165 failed, p99 2027 ms | after: 0/1840 failed | lock waiters max 24, longest wait 1.99s | checks 4/4 []
+[15:20:42] RESULT control-customer-fk-safe: plan completed in 3.3s | during: 0/203 failed, p99 187 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[exit 0, 1420s]

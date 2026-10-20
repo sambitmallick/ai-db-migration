@@ -1,0 +1,8 @@
+{"task": "add-index", "steps": [
+  {"note": "Remove any leftover (possibly INVALID) index from an earlier failed attempt, without blocking the app's reads or writes.",
+   "sql": "SET statement_timeout = 0; DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_id_idx;"},
+  {"note": "Build the index online. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so inserts and reads keep working during the build of the 10M-row table. (customer_id, id) serves WHERE customer_id = $1 ORDER BY id DESC LIMIT 10 directly, with no sort. No statement timeout: the build may take longer than any default.",
+   "sql": "SET statement_timeout = 0; SET maintenance_work_mem = '128MB'; CREATE INDEX CONCURRENTLY orders_customer_id_id_idx ON orders (customer_id, id);"},
+  {"note": "Verify the index exists and is valid (a concurrent build that fails leaves an INVALID index); fail the plan otherwise. Refresh statistics.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_index WHERE indexrelid = to_regclass('public.orders_customer_id_id_idx') AND indisvalid AND indisready) THEN RAISE EXCEPTION 'orders_customer_id_id_idx missing or invalid'; END IF; END $$; ANALYZE orders;"}
+]}

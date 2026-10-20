@@ -1,0 +1,47 @@
+{
+ "run": "live-email-not-null-2",
+ "task": "email-not-null",
+ "mode": "live",
+ "prompt": "/migrate email-not-null plans/live-email-not-null-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 121,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 8,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/email-not-null/task.md; ls tasks plans; cat db/seed.sql; cat app/server.js; cat k8s/shop.yaml\", \"description\": \"Read task, schema, app, and deployment\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); select count(*) filter (where email is null), count(*) filter (where email=''), min(id), max(id), count(*) from orders; select conname, contype, p"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select id, customer_id, amount, status, email, created_at from orders where email='' order by id limit 40; select id, email, created_at from orders where id > 10000000 order by id; selec"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select count(*), count(*) filter (where email is null) nulls, count(*) filter (where email='') empties, min(id), max(id), min(created_at), max(created_at) from orders where created_at > "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && pwd; ls; ls ..; git rev-parse --show-toplevel\", \"description\": \"Locate repo layout\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-email-not-null-2.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Make the app write '' instead of NULL for guest orders. The deploy waits for the rolling update; old pods"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01M1wrtsHuipZyM8gJcfghFa",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && pwd; ls; ls ..; git rev-parse --show-toplevel",
+    "description": "Locate repo layout"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-email-not-null-2.json`. I haven't run it or tested it, but I did check the live database first. It's on Postgres 17, has 2,500,000 orders with no email, has no triggers or extra indexes on `orders`, and 28 orders already store `''` as their email.\n\nWhat the plan does, in order:\n\n1. **Switches the app first.** It deploys `GUEST_EMAIL=empty` so new guest orders store `''`, then waits 15 seconds for the old pods to finish and exit. After that, nothing writes NULL any more.\n2. **Fills in the old rows.** It sets `email = ''` on the 2.5M guest orders in small batches by id, committing each batch. The app never updates old orders, so this doesn't block anything it does. Orders that have an email are left alone.\n3. **Blocks new NULLs.** It adds `CHECK (email IS NOT NULL) NOT VALID`, which applies to new writes but doesn't check existing rows yet. This needs a brief lock that also pauses the app's queries, so it gives up after 200 ms and retries. That way no request waits long enough to hit the app's 2-second timeout.\n4. **Does a last sweep, then validates.** One more `UPDATE` catches any NULL written in between, though there should be none. `VALIDATE CONSTRAINT` then checks every row without blocking reads or inserts. If a NULL were somehow left, the plan stops here before the column is changed.\n5. **Makes the column NOT NULL.** `SET NOT NULL` uses the validated check so it doesn't have to read the whole table again, and only holds its lock for a moment. The now-redundant check is dropped in the same transaction, using the same short lock timeout with retries. A final step fails the plan if the column didn't end up NOT NULL.\n\n**Decision for you:** after this, a guest order and the 28 existing orders that already have `''` look exactly the same. The task asks for this, but if anything needs to tell them apart, say so before running the plan."
+}

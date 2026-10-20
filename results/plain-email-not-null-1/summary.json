@@ -1,0 +1,47 @@
+{
+ "task": "email-not-null",
+ "label": "plain-email-not-null-1",
+ "plan": "plans/plain-email-not-null-1.json",
+ "steps": 11,
+ "steps_run": 11,
+ "completed": true,
+ "empty_plan": false,
+ "failed_step": null,
+ "migration_seconds": 38.8,
+ "baseline": {
+  "requests": 1357,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 39,
+  "max_ms": 90
+ },
+ "during": {
+  "requests": 2391,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 331,
+  "max_ms": 818
+ },
+ "after": {
+  "requests": 1842,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 12,
+  "max_ms": 58
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.5,
+  "during_rps": 61.7,
+  "after_rps": 61.4
+ },
+ "traffic_ok": true,
+ "checks_passed": 5,
+ "checks": 5,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=empty"
+}

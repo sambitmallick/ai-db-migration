@@ -1,0 +1,47 @@
+{
+ "run": "live-add-index-2",
+ "task": "add-index",
+ "mode": "live",
+ "prompt": "/migrate add-index plans/live-add-index-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 69,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat tasks/add-index/task.md && ls tasks plans && cat db/seed.sql && cat k8s/shop.yaml\", \"description\": \"Read task, seed schema, and k8s manifest\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat app/server.js && cat scripts/db-ro.sh && bash scripts/db-ro.sh \\\"SELECT c.relname, i.indisvalid, i.indisready, pg_get_indexdef(i.indexrelid) FROM pg_index i JOIN pg_class c ON c.oid=i.indexrelid WHERE i.indrelid IN ('orders'::regclass,'customers'::regclass);\\\" && bash scripts/db-ro."
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"EXPLAIN (ANALYZE, BUFFERS) SELECT id, amount FROM orders WHERE customer_id = 123 ORDER BY id DESC LIMIT 10;\\\" && bash scripts/db-ro.sh \\\"SELECT indexrelname, idx_scan, last_idx_scan, pg_size_pretty(pg_relation_size(indexrelid)) FROM pg_stat_user_indexes WHERE rel"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls harness && grep -rn \\\"psql\\\" harness | head -20\", \"description\": \"Check how harness executes SQL steps\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-add-index-2.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Pre-check (read-only): fail early, before touching anything, if an INVALID index named orders_customer_id_idx exist"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=require('./plans/live-add-index-2.json');console.log(p.task,p.steps.length)\\\"\", \"description\": \"Validate plan JSON parses\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01MJ3kAv31EDUD2vdUuJNU5D",
+   "tool_input": {
+    "command": "node -e \"const p=require('./plans/live-add-index-2.json');console.log(p.task,p.steps.length)\"",
+    "description": "Validate plan JSON parses"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-add-index-2.json`. The index the task asks for already exists on the live database. `orders_customer_id_idx` on `orders (customer_id, id)` is valid, and the customer page query already uses it (0.85 ms instead of a full table scan). So on today's database the plan builds nothing.\n\nIt's written to work either way:\n\n1. **Pre-check:** stops the plan before anything changes if an index with that name exists but is broken (for example, left over from an interrupted build). The next step would otherwise skip over it silently.\n2. **Build:** `CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id, id);`. If the index exists, this does nothing. If it doesn't, Postgres builds it while the shop's reads and writes keep running. The step runs alone because this command can't run inside a transaction. The `(customer_id, id)` column order matches the customer page's `ORDER BY id DESC LIMIT 10`, so it reads its 10 rows straight from the index.\n3. **Post-check:** fails the plan if there isn't a working index starting with `customer_id` on `orders` at the end.\n\nThere are no deploys, the app doesn't change, and no data is written. I couldn't parse-check the JSON file because the command was denied, but I wrote it by hand with care."
+}

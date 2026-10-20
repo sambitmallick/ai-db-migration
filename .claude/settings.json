@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Write(plans/**)",
+      "Edit(plans/**)",
+      "Bash(bash scripts/db-ro.sh *)"
+    ],
+    "deny": [
+      "Bash(kubectl *)",
+      "Bash(psql *)",
+      "Write(app/**)",
+      "Write(db/**)",
+      "Write(k8s/**)",
+      "Write(tasks/**)",
+      "Write(scripts/**)",
+      "Write(.claude/**)",
+      "Edit(app/**)",
+      "Edit(db/**)",
+      "Edit(k8s/**)",
+      "Edit(tasks/**)",
+      "Edit(scripts/**)",
+      "Edit(.claude/**)"
+    ]
+  }
+}

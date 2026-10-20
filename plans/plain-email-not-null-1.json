@@ -1,0 +1,33 @@
+{"task": "email-not-null", "steps": [
+  {"note": "App stores '' instead of NULL for guest orders from now on (rolling update, no downtime).",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+
+  {"note": "Let the old pods finish their in-flight requests and exit.", "wait": 10},
+
+  {"note": "Forbid new NULL emails: CHECK constraint NOT VALID (no table scan, momentary lock). Short lock_timeout with retries so app queries never queue behind a waiting ALTER.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '300ms', true); FOR i IN 1..100 LOOP BEGIN ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+
+  {"note": "Backfill guest orders, ids 1..3,500,000: batches of 500k ids (~125k rows), each its own transaction.",
+   "sql": "UPDATE orders SET email = '' WHERE id >= 1 AND id < 500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 500001 AND id < 1000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 1000001 AND id < 1500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 1500001 AND id < 2000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 2000001 AND id < 2500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 2500001 AND id < 3000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 3000001 AND id < 3500001 AND email IS NULL;"},
+
+  {"note": "Backfill guest orders, ids 3,500,001..7,000,000.",
+   "sql": "UPDATE orders SET email = '' WHERE id >= 3500001 AND id < 4000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 4000001 AND id < 4500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 4500001 AND id < 5000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 5000001 AND id < 5500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 5500001 AND id < 6000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 6000001 AND id < 6500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 6500001 AND id < 7000001 AND email IS NULL;"},
+
+  {"note": "Backfill guest orders, ids 7,000,001..10,500,000.",
+   "sql": "UPDATE orders SET email = '' WHERE id >= 7000001 AND id < 7500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 7500001 AND id < 8000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 8000001 AND id < 8500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 8500001 AND id < 9000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 9000001 AND id < 9500001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 9500001 AND id < 10000001 AND email IS NULL; UPDATE orders SET email = '' WHERE id >= 10000001 AND id < 10500001 AND email IS NULL;"},
+
+  {"note": "Sweep any NULL email left anywhere (e.g. ids beyond the batched range).",
+   "sql": "UPDATE orders SET email = '' WHERE email IS NULL;"},
+
+  {"note": "Validate the CHECK constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL: Postgres uses the validated CHECK to skip the table scan, so the exclusive lock is momentary. Same lock_timeout + retry.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '300ms', true); FOR i IN 1..100 LOOP BEGIN ALTER TABLE orders ALTER COLUMN email SET NOT NULL; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+
+  {"note": "Drop the now-redundant CHECK constraint.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '300ms', true); FOR i IN 1..100 LOOP BEGIN ALTER TABLE orders DROP CONSTRAINT orders_email_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.3); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+
+  {"note": "Verify: orders.email is NOT NULL (fails the plan otherwise).",
+   "sql": "DO $$ BEGIN IF NOT (SELECT attnotnull FROM pg_attribute WHERE attrelid = 'orders'::regclass AND attname = 'email') THEN RAISE EXCEPTION 'orders.email is still nullable'; END IF; END $$;"}
+]}

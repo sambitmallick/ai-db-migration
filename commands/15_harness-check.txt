@@ -1,0 +1,4 @@
+$ python harness/run_plan.py add-index controls/add-index/naive.json harness-check-naive 2>&1 | grep RESULT && python harness/run_plan.py add-index controls/add-index/safe.json harness-check-safe 2>&1 | grep RESULT
+[16:08:51] RESULT harness-check-naive: plan completed in 4.2s | during: 80/261 failed, p99 3003 ms | after: 0/1844 failed | lock waiters max 24, longest wait 1.99s | checks 5/5 []
+[16:10:41] RESULT harness-check-safe: plan completed in 6.2s | during: 0/382 failed, p99 46 ms | after: 0/1841 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[exit 0, 217s]

@@ -1,0 +1,46 @@
+{
+ "run": "live-customer-fk-3",
+ "task": "customer-fk",
+ "mode": "live",
+ "prompt": "/migrate customer-fk plans/live-customer-fk-3.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 95,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-fk\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh && cat k8s/shop.yaml && ls tasks plans\", \"description\": \"Show DB script, k8s manifest, task and plan lists\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT version();\\\" && bash scripts/db-ro.sh \\\"\\\\d orders\\\" && bash scripts/db-ro.sh \\\"\\\\d customers\\\" && bash scripts/db-ro.sh \\\"SELECT conname, conrelid::regclass, contype, convalidate"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT max(id), count(*) FILTER (WHERE id > 10000000) AS new_orders FROM orders WHERE id > 9999000;\\\" && bash scripts/db-ro.sh \\\"SELECT customer_id, count(*) FROM orders WHERE id > 10000"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT l.pid, l.locktype, l.relation::regclass, l.mode, l.granted FROM pg_locks l WHERE l.pid <> pg_backend_pid();\\\" && bash scripts/db-ro.sh \\\"SELECT pid, backend_type FROM pg_stat_acti"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-fk-3.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the foreign key as NOT VALID: no table scan, only a brief SHARE ROW EXCLUSIVE lock on orders and customers."
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I've written the plan to `plans/live-customer-fk-3.json`; it hasn't been run yet. It adds the foreign key without stopping traffic, changes no rows, and doesn't touch the app.\n\n**What I found in the live database:** none of the 10,000,417 orders points to a missing customer, all 50,000 customer ids (1\u201350,000) exist, and there's no foreign key yet. So the existing data already satisfies the rule.\n\n**What the plan does:**\n1. **Adds the foreign key as `NOT VALID`.** Postgres creates it without checking existing rows, so it only needs a very short lock on `orders` and `customers`. It gives up on the lock after 500 ms, so app queries never wait long behind it; their limit is 2 s. If the tables are busy it tries again, up to 60 times, one second apart. From here on, new orders must reference an existing customer.\n2. **Checks the existing 10M orders (`VALIDATE CONSTRAINT`).** This scan uses a lighter lock that doesn't block the app's reads or inserts, so it can take as long as it needs while traffic carries on. It also retries if the lock is briefly taken.\n3. **Confirms the constraint exists and is fully checked**, and fails the plan if it isn't.\n\n**If something goes wrong:**\n- If step 1 can't get its lock after 60 tries, the plan stops and nothing has changed.\n- If step 2 found an order with a missing customer (none exist now), it would stop and leave the key unchecked, but new orders would still be enforced. No data is deleted or changed either way.\n\n**After the migration:** any order placed for a customer id that doesn't exist will be rejected, and the app returns an error (HTTP 500) for it. That's what the foreign key is for, but it's the one way this change can cause errors under live traffic. None of the 417 orders placed since the database was seeded had a bad customer id.\n\nI didn't add an index on `orders.customer_id`. Without one, deleting a customer means scanning all of `orders`; the app never deletes customers, so it doesn't matter now."
+}

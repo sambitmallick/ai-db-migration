@@ -1,0 +1,16 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Roll the app so guest orders store '' instead of NULL. After this no new NULL emails are written.",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+
+  {"note": "Backfill existing NULL emails to '' in small id-range batches, each committed on its own, so row locks are short and no long transaction holds up the app or vacuum.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE lo bigint := 0; hi bigint; step constant bigint := 50000; BEGIN SELECT max(id) INTO hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET email = '' WHERE id > lo AND id <= lo + step AND email IS NULL; COMMIT; lo := lo + step; PERFORM pg_sleep(0.02); END LOOP; END $$;"},
+
+  {"note": "Add CHECK (email IS NOT NULL) as NOT VALID: blocks any new NULL, no table scan. Needs a brief ACCESS EXCLUSIVE lock, so take it with a short lock_timeout and retry rather than queueing in front of app queries.",
+   "sql": "DO $$ BEGIN FOR i IN 1..60 LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to add constraint'; END $$;"},
+
+  {"note": "Validate the constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails (and stops the plan) if any NULL remains.",
+   "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL: Postgres uses the validated CHECK to skip the table scan, so the ACCESS EXCLUSIVE lock is only momentary. Then drop the now-redundant CHECK. Same short-lock retry.",
+   "sql": "DO $$ BEGIN FOR i IN 1..60 LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ALTER COLUMN email SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_email_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to set NOT NULL'; END $$;"}
+]}

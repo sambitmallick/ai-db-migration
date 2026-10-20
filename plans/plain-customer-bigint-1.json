@@ -1,0 +1,40 @@
+{"task": "customer-bigint", "steps": [
+  {"note": "Trigger function that copies customer_id into the new bigint column on every insert / update of customer_id. Touches no table, takes no lock on orders.",
+   "sql": "CREATE OR REPLACE FUNCTION orders_customer_id_sync() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.customer_id_new := NEW.customer_id; RETURN NEW; END $f$;"},
+
+  {"note": "In one short transaction: add the nullable bigint column (metadata only, no rewrite), an unvalidated NOT NULL check, and the sync trigger. From the commit on, every new row has customer_id_new set. The brief ACCESS EXCLUSIVE lock is taken with a 500ms lock_timeout and retried, so app queries never queue behind it for long.",
+   "sql": "DO $$ DECLARE tries int := 0; BEGIN PERFORM set_config('lock_timeout', '500ms', true); LOOP BEGIN ALTER TABLE orders ADD COLUMN customer_id_new bigint; ALTER TABLE orders ADD CONSTRAINT orders_customer_id_new_not_null CHECK (customer_id_new IS NOT NULL) NOT VALID; CREATE TRIGGER orders_customer_id_sync BEFORE INSERT OR UPDATE OF customer_id ON orders FOR EACH ROW EXECUTE FUNCTION orders_customer_id_sync(); EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 60 THEN RAISE; END IF; PERFORM pg_sleep(1); END; END LOOP; END $$;"},
+
+  {"note": "Backfill ids up to 2,000,000 in batches of 10,000 rows, committing after each batch (row locks only; the app only inserts, so nothing contends).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 0; hi bigint := 2000000; BEGIN WHILE s <= hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= s AND id < LEAST(s + 10000, hi + 1) AND customer_id_new IS NULL; COMMIT; s := s + 10000; END LOOP; END $$;"},
+  {"note": "Vacuum so the dead row versions from this chunk are reused by the next one (keeps bloat bounded). Non-blocking for the app.",
+   "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill ids 2,000,001 - 4,000,000.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 2000001; hi bigint := 4000000; BEGIN WHILE s <= hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= s AND id < LEAST(s + 10000, hi + 1) AND customer_id_new IS NULL; COMMIT; s := s + 10000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill ids 4,000,001 - 6,000,000.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 4000001; hi bigint := 6000000; BEGIN WHILE s <= hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= s AND id < LEAST(s + 10000, hi + 1) AND customer_id_new IS NULL; COMMIT; s := s + 10000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill ids 6,000,001 - 8,000,000.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 6000001; hi bigint := 8000000; BEGIN WHILE s <= hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= s AND id < LEAST(s + 10000, hi + 1) AND customer_id_new IS NULL; COMMIT; s := s + 10000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "SET statement_timeout = 0; VACUUM orders;"},
+
+  {"note": "Backfill everything above 8,000,000 up to the current max id (rows inserted after the trigger was created already have the value).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE s bigint := 8000001; hi bigint; BEGIN SELECT max(id) INTO hi FROM orders; WHILE s <= hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= s AND id < LEAST(s + 10000, hi + 1) AND customer_id_new IS NULL; COMMIT; s := s + 10000; END LOOP; END $$;"},
+  {"note": "Vacuum and refresh statistics.", "sql": "SET statement_timeout = 0; VACUUM ANALYZE orders;"},
+
+  {"note": "Validate the NOT NULL check (SHARE UPDATE EXCLUSIVE: app reads and inserts keep running), then verify every row has customer_id_new equal to customer_id. Fails the plan, before any destructive change, if a single row differs.",
+   "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_not_null; DO $$ BEGIN IF EXISTS (SELECT 1 FROM orders WHERE customer_id_new IS DISTINCT FROM customer_id) THEN RAISE EXCEPTION 'customer_id_new does not match customer_id on some rows'; END IF; END $$;"},
+
+  {"note": "The swap, in one short transaction with lock_timeout + retry: SET NOT NULL (no table scan: proven by the validated check), drop the trigger, drop the old integer column (metadata only), rename the bigint column to customer_id, drop the helper check. The app's SQL names columns explicitly, so it works unchanged before and after; no redeploy needed.",
+   "sql": "DO $$ DECLARE tries int := 0; BEGIN PERFORM set_config('lock_timeout', '500ms', true); LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ALTER COLUMN customer_id_new SET NOT NULL; DROP TRIGGER orders_customer_id_sync ON orders; ALTER TABLE orders DROP COLUMN customer_id; ALTER TABLE orders RENAME COLUMN customer_id_new TO customer_id; ALTER TABLE orders DROP CONSTRAINT orders_customer_id_new_not_null; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 60 THEN RAISE; END IF; PERFORM pg_sleep(1); END; END LOOP; END $$;"},
+
+  {"note": "Drop the trigger function and check the result: orders.customer_id is bigint NOT NULL.",
+   "sql": "DROP FUNCTION orders_customer_id_sync(); DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'customer_id' AND data_type = 'bigint' AND is_nullable = 'NO') THEN RAISE EXCEPTION 'orders.customer_id is not bigint NOT NULL'; END IF; END $$;"},
+
+  {"note": "Statistics for the new customer_id column (used by the /customer query planner).",
+   "sql": "SET statement_timeout = 0; ANALYZE orders;"}
+]}

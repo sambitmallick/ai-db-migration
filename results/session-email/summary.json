@@ -1,0 +1,47 @@
+{
+ "task": "email-not-null",
+ "label": "session-email",
+ "plan": "plans/tui-email.json",
+ "steps": 6,
+ "steps_run": 6,
+ "completed": true,
+ "empty_plan": false,
+ "failed_step": null,
+ "migration_seconds": 42.1,
+ "baseline": {
+  "requests": 1357,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 12,
+  "max_ms": 57
+ },
+ "during": {
+  "requests": 2595,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 1053,
+  "max_ms": 1492
+ },
+ "after": {
+  "requests": 1838,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 13,
+  "max_ms": 54
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.5,
+  "during_rps": 61.6,
+  "after_rps": 61.3
+ },
+ "traffic_ok": true,
+ "checks_passed": 5,
+ "checks": 5,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=empty"
+}

@@ -1,0 +1,47 @@
+{
+ "run": "live-rename-amount-2",
+ "task": "rename-amount",
+ "mode": "live",
+ "prompt": "/migrate rename-amount plans/live-rename-amount-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 190,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 31,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/rename-amount/task.md && ls tasks/rename-amount plans && cat db/seed.sql && cat app/server.js && cat k8s/shop.yaml\", \"description\": \"Read task, schema, app and deployment\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; ls harness experiment controls results 2>/dev/null | head -50; bash scripts/db-ro.sh \\\"select version(); \\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select version();\\\" ; bash scripts/db-ro.sh \\\"select attname, format_type(atttypid,atttypmod), attnotnull from pg_attribute where attrelid='orders'::regclass and attnum>0 and not attisdr"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls -R harness scripts | head -40\", \"description\": \"List harness and scripts files\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && python -I - <<'EOF'\\nimport json\\ndef retry(stmts, tries=100):\\n    return (\\\"DO $retry$ DECLARE n int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); \\\"\\n            \\\"LOOP BEGIN \\\" + stmts + \\\""
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-rename-amount-2.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n {\\\"note\\\": \\\"Create the trigger function that keeps amount and total equal on every insert/update (takes no lock on order"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_019tRNgqkUzbn4HUMzHFAoCk",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && python -I - <<'EOF'\nimport json\ndef retry(stmts, tries=100):\n    return (\"DO $retry$ DECLARE n int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); \"\n            \"LOOP BEGIN \" + stmts + \" EXIT; EXCEPTION WHEN lock_not_available THEN n := n + 1; \"\n            f\"IF n >= {tries} THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $retry$;\")\ndef backfill(lo, hi_expr):\n    return (\"DO $bf$ DECLARE b bigint := %d; hi bigint := %s; BEGIN WHILE b <= hi LOOP \"\n            \"UPDATE orders SET total = amount WHERE id >= b AND id < LEAST(b + 10000, hi + 1) AND total IS NULL; \"\n            \"COMMIT; PERFORM pg_sleep(0.02); b := b + 10000; END LOOP; END $bf$;\") % (lo, hi_expr)\ncheck = (\"DO $chk$ BEGIN IF EXISTS (SELECT 1 FROM orders WHERE total IS DISTINCT FROM amount) \"\n         \"THEN RAISE EXCEPTION 'orders.total does not match orders.amount'; END IF; END $chk$;\")\nfn = (\"CREATE OR REPLACE FUNCTION orders_sync_amount_total() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN \"\n      \"IF TG_OP = 'INSERT' THEN \"\n      \"IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; \"\n      \"ELSIF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; \"\n      \"ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; \"\n      \"END IF; RETURN NEW; END $f$;\")\nsteps = [\n  {\"note\": \"Create the trigger function that keeps amount and total equal on every insert/update (no lock on orders).\", \"sql\": fn},\n  {\"note\": \"Add nullable column total (metadata-only, instant) and the sync trigger in one transaction; short lock_timeout with retries so live queries never queue behind it.\",\n   \"sql\": retry(\"ALTER TABLE orders ADD COLUMN total numeric(10,2); CREATE TRIGGER orders_sync_amount_total BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_amount_total();\")},\n]\nM = 1000000\nfor k in range(10):\n    lo = k*M + 1\n    hi = str((k+1)*M) if k < 9 else \"(SELECT max(id) FROM orders)\"\n    steps.append({\"note\": f\"Backfill total = amount for ids {lo}..{'max' if k==9 else (k+1)*M} in 10k-row batches, each committed on its own (no long row locks).\", \"sql\": backfill(lo, hi)})\n    steps.append({\"note\": \"Vacuum so the dead row versions from this chunk are reused instead of bloating the table.\", \"sql\": \"VACUUM orders;\"})\nsteps += [\n  {\"note\": \"Verify every row has total equal to amount; stops the plan before anything else changes if not.\", \"sql\": check},\n  {\"note\": \"Add NOT NULL as a NOT VALID check constraint (instant, retried on lock timeout).\",\n   \"sql\": retry(\"ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID;\")},\n  {\"note\": \"Validate the check constraint: scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or writes.\",\n   \"sql\": \"ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;\"},\n  {\"note\": \"SET NOT NULL on total (no scan: PG uses the validated check constraint), then drop the now-redundant check.\",\n   \"sql\": retry(\"ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_total_not_null;\")},\n  {\"note\": \"Roll the app to read and write total. During the rollout old pods write amount and new pods write total; the trigger fills the other column, so both stay valid.\",\n   \"deploy\": {\"AMOUNT_READ\": \"total\", \"AMOUNT_WRITE\": \"total\"}},\n  {\"note\": \"Let terminating old pods (30 s grace period) finish any in-flight requests that still use amount.\", \"wait\": 40},\n  {\"note\": \"Verify again that total equals amount for every row before dropping anything.\", \"sql\": check},\n  {\"note\": \"Drop the sync trigger, the old amount column and the function in one short transaction (retried on lock timeout).\",\n   \"sql\": retry(\"DROP TRIGGER orders_sync_amount_total ON orders; ALTER TABLE orders DROP COLUMN amount; DROP FUNCTION orders_sync_amount_total();\")},\n  {\"note\": \"Clean up the last chunk's dead rows and refresh statistics.\", \"sql\": \"VACUUM ANALYZE orders;\"},\n]\nwith open(\"plans/live-rename-amount-2.json\", \"w\", newline=\"\\n\") as f:\n    json.dump({\"task\": \"rename-amount\", \"steps\": steps}, f, indent=1)\nprint(len(steps))\nEOF\npython -I -c \"import json;d=json.load(open('plans/live-rename-amount-2.json'));print(d['steps'][1]['sql']);print(d['steps'][2]['sql'])\"",
+    "description": "Generate the migration plan JSON file"
+   }
+  }
+ ],
+ "answer": "I've written the plan to `plans/live-rename-amount-2.json`. It hasn't been run or tested. My shell access was blocked partway through, so I wrote the file by hand and couldn't check that it parses as JSON or that the SQL runs.\n\nPostgres can rename a column instantly, but old and new app pods run side by side during a rollout, so a plain rename would break whichever ones use the other name. The plan copies the data into a new column instead:\n\n1. **Add `total` with a sync trigger.** It adds a nullable `total` column, which is instant on Postgres 17. A trigger fills in whichever of `amount` or `total` an insert or update leaves empty, so the two columns always match. Every step that locks the table waits at most 200 ms for the lock and retries up to 100 times, so live queries are never held up for long.\n2. **Copy the data.** It copies `amount` into `total` in batches of 10,000 rows, committing each batch on its own. The table is vacuumed after each block of 1M rows so it doesn't grow much. The last block runs up to the highest id in the table at that moment.\n3. **Check, then make `total` NOT NULL.** The plan stops if any row's `total` differs from `amount`. If they all match, it adds a temporary check constraint and validates it, which doesn't block reads or writes. It then sets `total` to NOT NULL, which uses that check instead of scanning 10M rows, and drops the check.\n4. **Deploy.** The app is set to `AMOUNT_READ=total` and `AMOUNT_WRITE=total`. During the rollout, old pods write `amount` and new pods write `total`, and the trigger fills the other column. The plan then waits 40 s so shutting-down pods can finish their last requests (they get up to 30 s).\n5. **Drop the old column.** It runs the match check again. Then, in one short transaction, it drops the trigger, the `amount` column and the trigger function. A final vacuum and statistics refresh follows.\n\nThe API doesn't change, because the app already returns the column under the name `amount`. Values are copied "
+}

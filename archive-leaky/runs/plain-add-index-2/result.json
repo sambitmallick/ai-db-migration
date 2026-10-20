@@ -1,0 +1,51 @@
+{
+ "run": "plain-add-index-2",
+ "task": "add-index",
+ "mode": "plain",
+ "prompt": "/migrate add-index plans/plain-add-index-2.json",
+ "seconds": 73,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 4,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat tasks/add-index/task.md && ls tasks plans && cat db/seed.sql && cat k8s/shop.yaml\", \"description\": \"Read task, seed schema and k8s manifest\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat app/server.js && cat scripts/db-ro.sh && ls harness scripts && bash scripts/db-ro.sh \\\"select indexrelid::regclass, indisvalid, indisready, pg_get_indexdef(indexrelid) from pg_index where indrelid='orders'::regclass; select pid, state, query, now()-xact_start from pg_stat_activity w"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select indexrelid::regclass, indisvalid, indisready, pg_get_indexdef(indexrelid) from pg_index where indrelid='orders'::regclass;\\\" ; bash scripts/db-ro.sh \\\"select pid, usename, state, left(query,80), now()-xact_start from pg_stat_activity where datname=current_"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind, pg_size_pretty(pg_relation_size(c.oid)) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','information_schema','pg_toast');\\\"; bash scripts/db-ro.sh \\\"explain analyze SELECT id"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select * from pg_prepared_xacts;\\\"; bash scripts/db-ro.sh \\\"select locktype, relation::regclass, mode, granted, pid, virtualxid, transactionid from pg_locks;\\\"; bash scripts/db-ro.sh \\\"select tgname, tgrelid::regclass from pg_trigger where not tgisinternal; selec"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-add-index-2.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"If an INVALID orders_customer_id_idx is left over from an interrupted concurrent build, rename it out of the way ("
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=require('./plans/plain-add-index-2.json'); console.log(p.task, p.steps.length)\\\"\", \"description\": \"Check the plan file is valid JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01QDgVz7HxEPsRV8EahHbpVC",
+   "tool_input": {
+    "command": "node -e \"const p=require('./plans/plain-add-index-2.json'); console.log(p.task, p.steps.length)\"",
+    "description": "Check the plan file is valid JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-add-index-2.json`. It adds the index on `orders.customer_id` using `CREATE INDEX CONCURRENTLY`, so the app's inserts and reads keep working while the index builds on the 10M rows. It doesn't redeploy the app.\n\n1. **Clear out a broken leftover.** If an earlier build was interrupted, it can leave an `orders_customer_id_idx` that Postgres marks unusable. This step renames that one out of the way and doesn't touch a working index.\n2. **Drop the leftover**, if there is one, without blocking the app.\n3. **Build the index** with `CREATE INDEX CONCURRENTLY IF NOT EXISTS`. If the index already exists, this step does nothing.\n4. **Check the result.** The plan fails with an error if the index is missing or unusable.\n\nSteps 2 and 3 each have a step to themselves because a concurrent index build or drop can't run inside a transaction, which is how a multi-statement step might be run.\n\nThe live database already has a working `orders_customer_id_idx`, and the customer query uses it (about 21 ms). It's probably left over from an earlier run, since `db/seed.sql` doesn't create it. If the database is reset to the seed first, the plan builds the index; if not, the build step does nothing and the check passes.\n\nI didn't confirm the file parses as JSON because running a parser was blocked in this session. It's short and hand-checked."
+}

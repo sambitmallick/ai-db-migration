@@ -1,0 +1,25 @@
+{"task": "customer-bigint", "steps": [
+  {"note": "Trigger function that copies customer_id into the new bigint column on every insert/update. Touches no table, takes no lock on orders.",
+   "sql": "CREATE OR REPLACE FUNCTION orders_customer_id_sync() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.customer_id_new := NEW.customer_id; RETURN NEW; END $$;"},
+
+  {"note": "Add nullable column customer_id_new bigint (metadata only, no rewrite) and the sync trigger, in one transaction. Locks are taken with a short lock_timeout and retried, so app queries never queue behind us for more than a few hundred ms.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE i int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', least(200 + i * 10, 500) || 'ms', true); ALTER TABLE orders ADD COLUMN customer_id_new bigint; CREATE TRIGGER orders_customer_id_sync BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_customer_id_sync(); EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 300 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$;"},
+
+  {"note": "Backfill existing rows in batches of 20,000 ids, committing each batch (short row locks, no table lock; the app never updates orders). Every row inserted from now on is filled by the trigger.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE lo bigint; hi bigint; step int := 20000; BEGIN SELECT min(id), max(id) INTO lo, hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= lo AND id < lo + step AND customer_id_new IS NULL; COMMIT; lo := lo + step; END LOOP; END $$;"},
+
+  {"note": "Clean up the dead tuples left by the backfill (plain VACUUM, does not block reads or writes).",
+   "sql": "SET statement_timeout = 0; VACUUM ANALYZE orders;"},
+
+  {"note": "Prove the new column is NOT NULL without a long lock: add a NOT VALID check (brief lock, retried), then VALIDATE it (scans under SHARE UPDATE EXCLUSIVE, which does not block the app).",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE i int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', least(200 + i * 10, 500) || 'ms', true); ALTER TABLE orders ADD CONSTRAINT orders_customer_id_new_not_null CHECK (customer_id_new IS NOT NULL) NOT VALID; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 300 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$; ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_not_null;"},
+
+  {"note": "Safety check: stop the plan if any row's new value differs from the old one.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE n bigint; BEGIN SELECT count(*) INTO n FROM orders WHERE customer_id_new IS DISTINCT FROM customer_id; IF n > 0 THEN RAISE EXCEPTION '% rows have customer_id_new <> customer_id', n; END IF; END $$;"},
+
+  {"note": "Swap in one short transaction (lock retried): SET NOT NULL (no scan, the validated check proves it), drop the check and the trigger, drop the old integer column, rename customer_id_new to customer_id. All metadata-only. The app keeps using the name customer_id, so no deploy is needed.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE i int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', least(200 + i * 10, 500) || 'ms', true); LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ALTER COLUMN customer_id_new SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_customer_id_new_not_null; DROP TRIGGER orders_customer_id_sync ON orders; ALTER TABLE orders DROP COLUMN customer_id; ALTER TABLE orders RENAME COLUMN customer_id_new TO customer_id; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 300 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$; DROP FUNCTION orders_customer_id_sync();"},
+
+  {"note": "Verify: orders.customer_id is bigint NOT NULL.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'customer_id' AND data_type = 'bigint' AND is_nullable = 'NO') THEN RAISE EXCEPTION 'orders.customer_id is not bigint NOT NULL'; END IF; END $$; ANALYZE orders;"}
+]}

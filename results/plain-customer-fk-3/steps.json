@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Add the foreign key as NOT VALID: from now on every inserted/updated order must reference an existing customer, without scanning the 10M existing rows. This needs a brief SHARE ROW EXCLUSIVE lock on orders and customers, so take it with a short lock_timeout (app queries have a 2 s statement timeout) and retry instead of queueing behind a long transaction. Skipped if the constraint already exists.",
+  "kind": "sql",
+  "start": 1792506945.6385236,
+  "end": 1792506945.9385955,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing rows. VALIDATE CONSTRAINT only takes SHARE UPDATE EXCLUSIVE on orders (ROW SHARE on customers), so the app keeps reading and inserting during the 10M-row scan. No statement timeout for this long scan. If any pre-existing order points at a missing customer, this fails and the plan stops with the constraint still enforced for new rows (live check before planning found 0 orphans).",
+  "kind": "sql",
+  "start": 1792506945.9396143,
+  "end": 1792506947.9830494,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the foreign key exists and is validated.",
+  "kind": "sql",
+  "start": 1792506947.9830494,
+  "end": 1792506948.2738452,
+  "ok": true,
+  "output": ""
+ }
+]

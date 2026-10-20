@@ -1,0 +1,1 @@
+SQUAWK lock risk: none | may break app: ban-drop-column, ban-drop-constraint, ban-drop-not-null | hygiene: 8

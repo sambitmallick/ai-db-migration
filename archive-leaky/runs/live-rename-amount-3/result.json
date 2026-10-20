@@ -1,0 +1,67 @@
+{
+ "run": "live-rename-amount-3",
+ "task": "rename-amount",
+ "mode": "live",
+ "prompt": "/migrate rename-amount plans/live-rename-amount-3.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 156,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 6,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls; cat tasks/rename-amount/task.md; ls tasks plans; cat db/seed.sql | head -100; cat k8s/shop.yaml\", \"description\": \"Read task, seed and k8s config\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select version(); select count(*) from orders where amount is null; select tgname, tgrelid::regclass from pg_trigger where no"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select tgname, tgrelid::regclass from pg_trigger where not tgisinternal; select schemaname, viewname, definition from pg_views where schemaname not in ('pg_catalog','information_schema')"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select tgname, tgrelid::regclass from pg_trigger where not tgisinternal; select schemaname, viewname, definition from pg_views where schemaname not in ('pg_catalog','information_schema')"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where nspname='audit'; select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"explain analyze SELECT id, total AS amount FROM orders WHERE customer_id = 4242 ORDER BY id DESC LIMIT 10; select pg_get_serial_sequence('orders','id'); show server_version; select * fro"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-rename-amount-3.json\", \"content\": \"{\\\"task\\\": \\\"rename-amount\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"In one transaction (metadata only, no rewrite): rename the table to orders_t, rename its column amount to t"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"const p=require('./plans/live-rename-amount-3.json'); console.log(p.task, p.steps.length)\\\"\", \"description\": \"Check the plan is valid JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01KQEEhd6hiTMW4WbZduPMXJ",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && bash scripts/db-ro.sh \"select tgname, tgrelid::regclass from pg_trigger where not tgisinternal; select schemaname, viewname, definition from pg_views where schemaname not in ('pg_catalog','information_schema'); select n.nspname, proname from pg_proc p join pg_namespace n on n.oid=p.pronamespace where nspname not in ('pg_catalog','information_schema'); select nspname from pg_namespace; select attname, attisdropped from pg_attribute where attrelid='orders'::regclass and attnum>0; select reltuples, pg_size_pretty(pg_total_relation_size('orders')) from pg_class where relname='orders'; select pid, usename, application_name, state, left(query,120) from pg_stat_activity where datname='shop';\"; kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}'; echo; kubectl get pods",
+    "description": "Inspect triggers, views, attributes and app env"
+   }
+  },
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01L3aKNraS9HdsWZGnE5PUfU",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"const p=require('./plans/live-rename-amount-3.json'); console.log(p.task, p.steps.length)\"",
+    "description": "Check the plan is valid JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-rename-amount-3.json`. It hasn't been run or tested, and I couldn't run a JSON syntax check on the file because that command was blocked. The SQL is written carefully but has never been executed.\n\n**Approach:** rename the column in place and put a temporary view in front of the table, instead of copying `amount` into a new column. A copy would rewrite all 10M rows (966 MB) while the shop is serving traffic, and roughly double the table on disk.\n\n1. **Rename, in one quick transaction:** rename `orders` to `orders_t`, rename `amount` to `total`, and create a view called `orders` that shows the same column under both names. Old pods keep using `amount`, new pods use `total`, and both write to the same data. No rows are rewritten.\n2. **Quick check** that both names work through the view.\n3. **Deploy** the app with `AMOUNT_READ=total` and `AMOUNT_WRITE=total`. `GUEST_EMAIL` stays `null`.\n4. **Wait 15 s** so old pods that are shutting down can finish their last requests.\n5. **Swap back, in one quick transaction:** drop the view and rename `orders_t` back to `orders`. It's the same table with the same index and sequence, now with `total numeric(10,2) NOT NULL` and no `amount`.\n6. **Check** that the final table matches the spec, and fail if it doesn't.\n\n**Keeping traffic running:** the two schema changes need a brief exclusive lock on the table. Each attempt gives up after 200 ms and retries every 0.5 s, up to 100 times. App queries are never stuck behind the lock long enough to reach their 2 s timeout (the slowest one, `/customer`, measured about 100 ms).\n\n**Your live database already has `total` and no `amount`.** It looks like a previous run left it that way, and the seed recreates `amount`. I wrote the plan for the seeded state. If it runs against the current state, step 1 fails and its transaction rolls back, so nothing changes and the app is never redeployed.\n\n**What it relies on:** inserts through the view must still get `orders.id` fr"
+}

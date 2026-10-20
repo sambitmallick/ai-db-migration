@@ -1,0 +1,6 @@
+{"task": "add-index", "steps": [
+  {"note": "Build the index without blocking reads or writes. CONCURRENTLY only takes a SHARE UPDATE EXCLUSIVE lock, so the app's INSERTs and SELECTs keep running. (customer_id, id) lets GET /customer's 'WHERE customer_id = $1 ORDER BY id DESC LIMIT 10' read 10 index entries with no sort. IF NOT EXISTS: the live database already has this exact index, so on that database this step changes nothing. No rows are touched either way.",
+   "sql": "CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id, id);"},
+  {"note": "Check that the index is valid and leads with customer_id. A failed concurrent build leaves an INVALID index behind, and IF NOT EXISTS would skip it silently, so stop loudly if that happened.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0] WHERE i.indexrelid = to_regclass('public.orders_customer_id_idx') AND i.indrelid = 'public.orders'::regclass AND i.indisvalid AND i.indisready AND a.attname = 'customer_id') THEN RAISE EXCEPTION 'orders_customer_id_idx is missing or invalid'; END IF; END $$;"}
+]}

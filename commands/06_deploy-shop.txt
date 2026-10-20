@@ -1,0 +1,13 @@
+$ kubectl apply -f k8s/shop.yaml && kubectl rollout status deployment/shop --timeout=120s && kubectl get pods -o wide
+service/shop created
+deployment.apps/shop created
+Waiting for deployment "shop" rollout to finish: 0 of 3 updated replicas are available...
+Waiting for deployment "shop" rollout to finish: 1 of 3 updated replicas are available...
+Waiting for deployment "shop" rollout to finish: 2 of 3 updated replicas are available...
+deployment "shop" successfully rolled out
+NAME                        READY   STATUS    RESTARTS   AGE   IP           NODE                  NOMINATED NODE   READINESS GATES
+postgres-6bf57d8646-fqwp6   1/1     Running   0          18s   10.244.0.5   dbmig-control-plane   <none>           <none>
+shop-dd4dcf578-2nvmh        1/1     Running   0          4s    10.244.0.7   dbmig-control-plane   <none>           <none>
+shop-dd4dcf578-7mvhw        1/1     Running   0          4s    10.244.0.6   dbmig-control-plane   <none>           <none>
+shop-dd4dcf578-dd9qp        1/1     Running   0          4s    10.244.0.8   dbmig-control-plane   <none>           <none>
+[exit 0, 4s]

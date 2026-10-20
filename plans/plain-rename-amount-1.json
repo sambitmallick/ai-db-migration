@@ -1,0 +1,28 @@
+{"task": "rename-amount", "steps": [
+  {"note": "Expand: create the trigger function that keeps amount and total in sync (whichever one a writer leaves NULL is copied from the other).",
+   "sql": "CREATE OR REPLACE FUNCTION orders_sync_amount_total() RETURNS trigger LANGUAGE plpgsql AS $$\nBEGIN\n  IF TG_OP = 'INSERT' THEN\n    IF NEW.total IS NULL THEN NEW.total := NEW.amount;\n    ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total;\n    END IF;\n  ELSIF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN\n    NEW.total := NEW.amount;\n  ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN\n    NEW.amount := NEW.total;\n  END IF;\n  RETURN NEW;\nEND $$;"},
+
+  {"note": "Expand: add nullable total (metadata-only) and the sync trigger in one transaction. Short lock_timeout with retries so we never queue app queries behind a waiting ACCESS EXCLUSIVE lock.",
+   "sql": "DO $$\nBEGIN\n  PERFORM set_config('lock_timeout', '200ms', true);\n  FOR i IN 1..150 LOOP\n    BEGIN\n      ALTER TABLE orders ADD COLUMN total numeric(10,2);\n      CREATE TRIGGER orders_sync_amount_total BEFORE INSERT OR UPDATE ON orders\n        FOR EACH ROW EXECUTE FUNCTION orders_sync_amount_total();\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.3);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to add total';\nEND $$;"},
+
+  {"note": "Backfill total from amount in 20k-row id batches, committing each batch (short row locks, no long transaction). Rows above the max id seen here were inserted after the trigger existed, so already have total.",
+   "sql": "DO $$\nDECLARE\n  lo bigint := 0;\n  maxid bigint;\n  batch constant bigint := 20000;\nBEGIN\n  SELECT coalesce(max(id), 0) INTO maxid FROM orders;\n  WHILE lo <= maxid LOOP\n    UPDATE orders SET total = amount WHERE id >= lo AND id < lo + batch AND total IS NULL;\n    COMMIT;\n    lo := lo + batch;\n  END LOOP;\nEND $$;"},
+
+  {"note": "Prepare NOT NULL on total: add a NOT VALID check constraint (brief lock, no scan), with lock retries.",
+   "sql": "DO $$\nBEGIN\n  PERFORM set_config('lock_timeout', '200ms', true);\n  FOR i IN 1..150 LOOP\n    BEGIN\n      ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID;\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.3);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to add check constraint';\nEND $$;"},
+
+  {"note": "Validate the check constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails (and stops the plan) if any row still has a NULL total.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;"},
+
+  {"note": "Make total NOT NULL. Postgres uses the validated check constraint to skip the table scan, so the lock is brief; then drop the now-redundant check.",
+   "sql": "DO $$\nBEGIN\n  PERFORM set_config('lock_timeout', '200ms', true);\n  FOR i IN 1..150 LOOP\n    BEGIN\n      ALTER TABLE orders ALTER COLUMN total SET NOT NULL;\n      ALTER TABLE orders DROP CONSTRAINT orders_total_not_null;\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.3);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to set total NOT NULL';\nEND $$;"},
+
+  {"note": "Switch the app to total. During the rolling update old pods write amount and new pods write total; the trigger fills the other column, so both versions keep working.",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total"}},
+
+  {"note": "Give terminating old pods time to drain and exit (they close connections after ~3 s; grace period is 30 s).",
+   "wait": 35},
+
+  {"note": "Contract: first wait until no client session's last query still uses amount (old app version), failing safely if one remains; then drop the trigger and the amount column in one transaction with lock retries, and drop the function.",
+   "sql": "DO $$\nDECLARE\n  old_sessions int;\nBEGIN\n  FOR i IN 1..120 LOOP\n    PERFORM pg_stat_clear_snapshot();\n    SELECT count(*) INTO old_sessions FROM pg_stat_activity\n     WHERE datname = current_database() AND pid <> pg_backend_pid() AND backend_type = 'client backend'\n       AND (position('customer_id, amount, status' IN query) > 0 OR position('amount AS amount' IN query) > 0);\n    EXIT WHEN old_sessions = 0;\n    PERFORM pg_sleep(1);\n  END LOOP;\n  IF old_sessions > 0 THEN\n    RAISE EXCEPTION '% session(s) of the old app version still use amount; not dropping it', old_sessions;\n  END IF;\n  PERFORM set_config('lock_timeout', '200ms', true);\n  FOR i IN 1..150 LOOP\n    BEGIN\n      DROP TRIGGER orders_sync_amount_total ON orders;\n      ALTER TABLE orders DROP COLUMN amount;\n      DROP FUNCTION orders_sync_amount_total();\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.3);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to drop amount';\nEND $$;"}
+]}

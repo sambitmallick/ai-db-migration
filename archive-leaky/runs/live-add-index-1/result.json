@@ -1,0 +1,42 @@
+{
+ "run": "live-add-index-1",
+ "task": "add-index",
+ "mode": "live",
+ "prompt": "/migrate add-index plans/live-add-index-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 50,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\add-index\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select indexrelid::regclass, indisvalid, pg_get_indexdef(indexrelid) from pg_index where indrelid='orders'::regclass; select count(*) from orders; select version();"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls harness scripts plans; grep -rn \\\"psql\\\" harness scripts | head -20\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select setrole::regrole, setdatabase, setconfig from pg_db_role_setting; select rolname from pg_roles where rolcanlogin; select pg_size_pretty(pg_relation_size('orders')); select usename"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-add-index-1.json\", \"content\": \"{\\\"task\\\": \\\"add-index\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Remove any leftover (possibly INVALID) index from an earlier failed attempt so the build below starts clean. No-op "
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I've written the plan to `plans/live-add-index-1.json`. It has three SQL steps. The app's code and settings stay the same, so there's no deploy.\n\n1. **Clean up:** `DROP INDEX CONCURRENTLY IF EXISTS orders_customer_id_idx`. It does nothing today, but if an earlier attempt failed partway and left a broken index, this removes it first.\n2. **Build:** `CREATE INDEX CONCURRENTLY orders_customer_id_idx ON orders (customer_id, id)`. With `CONCURRENTLY`, the app's reads and inserts keep running during the build, so there are no errors or downtime and no data is changed. I added `id` after `customer_id` because the customer page asks for that customer's 10 newest orders, sorted by `id`. With both columns, the database reads them straight from the index without sorting. This command can't run inside a transaction, so it's in a step on its own.\n3. **Check:** a short block that fails the plan if the new index isn't valid. A build like this one can fail partway and still leave an index behind.\n\nWhat I checked on the live database:\n- `orders` has about 10M rows (751 MB) and only its primary-key index.\n- No transactions had been running a long time; these would make the build wait.\n- The `postgres` role has no statement timeout, so the timeout won't cut the build off.\n\nI haven't run the plan, so I don't know yet how long the build takes or whether it finishes cleanly; step 3 will tell you."
+}

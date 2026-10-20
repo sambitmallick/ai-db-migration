@@ -1,0 +1,38 @@
+{
+ "run": "plain-drop-status-1",
+ "task": "drop-status",
+ "mode": "plain",
+ "prompt": "/migrate drop-status plans/plain-drop-status-1.json",
+ "seconds": 34,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 1,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\drop-status\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_name='orders' ORDER BY ordinal_position; SELECT query FROM pg_stat_activity WHERE q"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-drop-status-1.json\", \"content\": \"{\\\"task\\\": \\\"drop-status\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"NOT dropping orders.status: app/server.js still writes it on every INSERT (status = 'new') and reads it in GET"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote `plans/plain-drop-status-1.json`, but the plan does not drop the column, because the app still writes and reads `orders.status`.\n\n**What the plan does:** one step that gives `status` a default value of `'new'`. This only changes table metadata, so it finishes instantly and doesn't rewrite the 10M rows. It sets a 2-second `lock_timeout`, so if it can't get the table lock it fails without blocking live traffic. With the default in place, a version of the app that stops writing `status` can still insert orders.\n\n**To finish the drop:**\n1. Change `app/server.js` so it no longer uses `status`. Remove it from the `INSERT` column list on lines 25\u201326 and from the `SELECT` on line 27. Then build and roll out a new image.\n2. Once all three replicas run the new image, the drop is safe: `SET lock_timeout='2s'; ALTER TABLE orders DROP COLUMN status;`. This is also metadata-only and doesn't rewrite the table. No indexes, constraints or views depend on the column.\n\nWhen the new app version is deployed, I can write that second plan."
+}

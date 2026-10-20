@@ -1,0 +1,50 @@
+[
+ {
+  "note": "Roll the app so guest orders store '' instead of NULL. From here on the app never writes a NULL email.",
+  "kind": "deploy",
+  "start": 1792500016.592118,
+  "end": 1792500020.3668659,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish their in-flight requests (3 s drain + in-flight work), so no NULL insert is still on its way.",
+  "kind": "wait",
+  "start": 1792500020.3668659,
+  "end": 1792500035.3685012,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID: blocks any new NULL without scanning the table. Needs a brief ACCESS EXCLUSIVE lock, so take it with a 300 ms lock_timeout and retry, never queueing app queries for long.",
+  "kind": "sql",
+  "start": 1792500035.3685012,
+  "end": 1792500035.6080728,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill: set email = '' on existing guest orders, in id ranges of 50,000 (~12,500 rows), committing each batch and pausing briefly. Only NULL emails are touched; no other column or row changes. The app never updates orders, so the row locks block nothing. Upper bound is max(id) now: the constraint guarantees no newer row can be NULL.",
+  "kind": "sql",
+  "start": 1792500035.6080728,
+  "end": 1792500061.530947,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint. Scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts. Fails (and stops the plan, harmlessly) if any NULL is left.",
+  "kind": "sql",
+  "start": 1792500061.530947,
+  "end": 1792500068.3703735,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL (no table scan: Postgres uses the valid check constraint as proof), then drop the now-redundant check, in one short transaction. Same lock_timeout + retry so app queries are never stuck behind the lock.",
+  "kind": "sql",
+  "start": 1792500068.3703735,
+  "end": 1792500068.6329951,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,58 @@
+[
+ {
+  "note": "Pre-check: orders.amount exists, total does not, and nothing named orders_t is in the way.",
+  "kind": "sql",
+  "start": 1792516489.405698,
+  "end": 1792516489.6876864,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Rename in place (metadata only, no row rewrite) and put a compatibility view named orders in front of the table that exposes the column as both total and amount. It is a simple, automatically updatable view: old pods insert/read amount, new pods insert/read total, both hit the same base column, and base defaults (id sequence, created_at) still apply. All three DDLs commit together. The short lock_timeout and retry loop keep it from queueing app traffic behind a pending ACCESS EXCLUSIVE lock while slow /customer scans hold the table.",
+  "kind": "sql",
+  "start": 1792516489.687958,
+  "end": 1792516489.9373794,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the view answers under both column names.",
+  "kind": "sql",
+  "start": 1792516489.9373794,
+  "end": 1792516490.1773827,
+  "ok": true,
+  "output": "1|48.30|48.30"
+ },
+ {
+  "note": "Roll the app over to the new column name. During the rolling update old pods use amount and new pods use total through the view.",
+  "kind": "deploy",
+  "start": 1792516490.1773827,
+  "end": 1792516493.6396947,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods drain (they keep serving ~3 s after SIGTERM, plus in-flight requests of up to 2 s).",
+  "kind": "wait",
+  "start": 1792516493.6396947,
+  "end": 1792516508.6449475,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the compatibility view and give the table its name back, atomically, with the same lock_timeout and retry loop. From here on the amount column no longer exists anywhere.",
+  "kind": "sql",
+  "start": 1792516508.6449475,
+  "end": 1792516508.9040632,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the end state: orders is a table, total is numeric(10,2) NOT NULL, amount is gone.",
+  "kind": "sql",
+  "start": 1792516508.9050617,
+  "end": 1792516509.1592214,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,60 @@
+$ python experiment/scoreboard.py
+run                                plan        secs  failed during   after    p99 lock wait  checks  squawk      verdict
+control-add-index-naive            done         5.1     92/310           0   3003     1.99s  5/5     flags lock  FAIL: 92 failed during
+control-add-index-safe             done         7.8      0/483           0     36     0.00s  5/5     ok          ZERO-DOWNTIME
+harness-check-naive                done         4.2     80/261           0   3003     1.99s  5/5     -           FAIL: 80 failed during
+harness-check-safe                 done         6.2      0/382           0     46     0.00s  5/5     -           ZERO-DOWNTIME
+live-add-index-1                   done         7.7      0/473           0     87     0.04s  5/5     ok          ZERO-DOWNTIME
+live-add-index-2                   done         7.3      0/453           0     68     0.00s  5/5     ok          ZERO-DOWNTIME
+live-add-index-3                   done        11.1      0/683           0     41     0.00s  5/5     ok          ZERO-DOWNTIME
+plain-add-index-1                  done         9.5      0/584           0     83     0.00s  5/5     ok          ZERO-DOWNTIME
+plain-add-index-2                  done         7.5      0/463           0     41     0.00s  5/5     ok          ZERO-DOWNTIME
+plain-add-index-3                  done         9.0      0/555           0     88     0.00s  5/5     ok          ZERO-DOWNTIME
+
+control-rename-amount-naive        done         5.5    280/337           1     21     0.00s  7/7     ok          FAIL: 280 failed during; 1 failed after
+control-rename-amount-safe         done        66.6      0/4102          0    113     0.00s  7/7     ok          ZERO-DOWNTIME
+live-rename-amount-1               done       131.2      0/8080          0     38     0.00s  7/7     ok          ZERO-DOWNTIME
+live-rename-amount-2               done       153.5      0/9445          0     18     1.53s  7/7     ok          ZERO-DOWNTIME
+live-rename-amount-3               done        45.6      0/2799          0     13     0.00s  7/7     ok          ZERO-DOWNTIME
+plain-rename-amount-1              done       166.9      0/10281         0    195    58.84s  7/7     ok          ZERO-DOWNTIME
+plain-rename-amount-2              done        88.5      0/5461          0     71     0.98s  7/7     ok          ZERO-DOWNTIME
+plain-rename-amount-3              done        94.8      0/5851          0    106     0.00s  7/7     ok          ZERO-DOWNTIME
+
+control-customer-bigint-naive      done        12.1    596/747           0   3003     2.00s  4/4     flags lock  FAIL: 596 failed during
+control-customer-bigint-safe       done        69.1      0/4261          0     74     0.10s  4/4     ok          ZERO-DOWNTIME
+live-customer-bigint-1             done        88.8      0/5477          0     47     0.00s  4/4     ok          ZERO-DOWNTIME
+live-customer-bigint-2             done       101.3      0/6243          0    303     0.00s  4/4     ok          ZERO-DOWNTIME
+live-customer-bigint-3             done       111.6      0/6881          0     20     0.20s  4/4     ok          ZERO-DOWNTIME
+plain-customer-bigint-1            done        63.2      0/3905          0     67     0.00s  4/4     ok          ZERO-DOWNTIME
+plain-customer-bigint-2            done        71.9      0/4440          0    170     0.09s  4/4     ok          ZERO-DOWNTIME
+plain-customer-bigint-3            done        66.5      0/4106          0     88     0.00s  4/4     ok          ZERO-DOWNTIME
+
+control-email-not-null-naive       STOPPED     25.9    252/1589          0   3002     1.99s  3/5     flags lock  FAIL: stopped at step 2; 252 failed during; orders.email is NOT NULL; guest orders placed during the migration were stored, with an empty email
+control-email-not-null-safe        done        28.7      0/1766          0     95     0.00s  5/5     ok          ZERO-DOWNTIME
+live-email-not-null-1              done        54.1      0/3338          0     83     0.00s  5/5     ok          ZERO-DOWNTIME
+live-email-not-null-2              done        70.3      0/4334          0    440     0.78s  5/5     ok          ZERO-DOWNTIME
+live-email-not-null-3              done        48.6      0/2992          0    385     0.15s  5/5     ok          ZERO-DOWNTIME
+plain-email-not-null-1             done        38.8      0/2391          0    331     0.00s  5/5     ok          ZERO-DOWNTIME
+plain-email-not-null-2             done        29.5      0/1824          0    245     0.00s  5/5     ok          ZERO-DOWNTIME
+plain-email-not-null-3             done        38.9      0/2401          0    141     0.00s  5/5     ok          ZERO-DOWNTIME
+
+control-customer-fk-naive          done         3.2     23/197           0   2180     1.99s  4/4     flags lock  FAIL: 23 failed during
+control-customer-fk-safe           done         2.3      0/141           0     67     0.00s  4/4     ok          ZERO-DOWNTIME
+live-customer-fk-1                 done         5.0      0/305           0    248     0.00s  4/4     ok          ZERO-DOWNTIME
+live-customer-fk-2                 done         3.7      0/228           0     26     0.00s  4/4     ok          ZERO-DOWNTIME
+live-customer-fk-3                 done         3.9      0/243           0     23     0.00s  4/4     ok          ZERO-DOWNTIME
+plain-customer-fk-1                done         3.1      0/189           0     75     0.00s  4/4     ok          ZERO-DOWNTIME
+plain-customer-fk-2                done         3.6      0/222           0     14     0.00s  4/4     ok          ZERO-DOWNTIME
+plain-customer-fk-3                done         2.6      0/162           0     28     0.00s  4/4     ok          ZERO-DOWNTIME
+
+control-drop-status-naive          done         0.2      8/15         1845     10     0.00s  3/4     ok          FAIL: 8 failed during; 1845 failed after; orders.status still exists (the app reads and writes it)
+control-drop-status-safe           done         0.0      0/0             0      0     0.00s  4/4     ok          ZERO-DOWNTIME
+live-drop-status-1                 done         0.0      0/0             0      0     0.00s  4/4     ok          ZERO-DOWNTIME
+live-drop-status-2                 done         0.4      0/28            0      6     0.00s  4/4     ok          ZERO-DOWNTIME
+live-drop-status-3                 done         0.0      0/0             0      0     0.00s  4/4     ok          ZERO-DOWNTIME
+plain-drop-status-1                done         0.3      0/16            0      8     0.00s  4/4     ok          ZERO-DOWNTIME
+plain-drop-status-2                done         0.3      0/16            0      5     0.00s  4/4     ok          ZERO-DOWNTIME
+plain-drop-status-3                done         0.0      0/0             0      0     0.00s  4/4     ok          ZERO-DOWNTIME
+
+zero-downtime successes: AI live: 18/18 | AI plain: 18/18 | control naive: 0/6 | control safe: 6/6 | harness check naive: 0/1 | harness check safe: 1/1
+[exit 0, 0s]

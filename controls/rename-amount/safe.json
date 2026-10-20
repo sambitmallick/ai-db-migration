@@ -1,0 +1,52 @@
+{
+ "task": "rename-amount",
+ "by": "control (safe)",
+ "steps": [
+  {
+   "note": "expand: add total",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ADD COLUMN total numeric(10,2);"
+  },
+  {
+   "note": "app writes both columns",
+   "deploy": {
+    "AMOUNT_WRITE": "amount,total"
+   }
+  },
+  {
+   "note": "backfill total in batches",
+   "sql": "DO $$ DECLARE lo bigint := 0; hi bigint; BEGIN SELECT max(id) INTO hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET total = amount WHERE id > lo AND id <= lo + 50000 AND total IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$;"
+  },
+  {
+   "note": "total: NOT NULL via a validated CHECK",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ADD CONSTRAINT total_not_null CHECK (total IS NOT NULL) NOT VALID;"
+  },
+  {
+   "note": "validate the check (scans, but doesn't block writes)",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT total_not_null;"
+  },
+  {
+   "note": "SET NOT NULL (instant: the check proves it), drop the check",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT total_not_null;"
+  },
+  {
+   "note": "app reads total",
+   "deploy": {
+    "AMOUNT_READ": "total"
+   }
+  },
+  {
+   "note": "amount may be NULL now (the app is about to stop writing it)",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ALTER COLUMN amount DROP NOT NULL;"
+  },
+  {
+   "note": "app writes only total",
+   "deploy": {
+    "AMOUNT_WRITE": "total"
+   }
+  },
+  {
+   "note": "contract: drop amount",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders DROP COLUMN amount;"
+  }
+ ]
+}

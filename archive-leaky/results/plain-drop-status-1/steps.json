@@ -1,0 +1,10 @@
+[
+ {
+  "note": "The column is NOT dropped: the deployed app (app/server.js) still writes status ('new') on every INSERT and reads it on GET /order/ID, and no setting turns that off. Dropping it now would make every order request fail. This step does only the safe first part of the job: it makes status nullable, so a later app version that stops writing it can roll out without errors. It is a metadata-only change. It takes a short lock, with a 200 ms lock_timeout and retries, so it never makes app queries wait long behind it.",
+  "kind": "sql",
+  "start": 1792501761.0684545,
+  "end": 1792501761.314759,
+  "ok": true,
+  "output": ""
+ }
+]

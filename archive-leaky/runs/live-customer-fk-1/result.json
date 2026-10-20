@@ -1,0 +1,59 @@
+{
+ "run": "live-customer-fk-1",
+ "task": "customer-fk",
+ "mode": "live",
+ "prompt": "/migrate customer-fk plans/live-customer-fk-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 78,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-fk\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; ls harness k8s plans tasks; bash scripts/db-ro.sh \\\"SELECT conname, contype, pg_get_constraintdef(oid) FROM pg_constraint WHERE conrelid IN ('orders'::regclass,'customers'::regclass); SELECT indexrelid::regclass, pg_get_indexdef(indexrelid) FROM pg_index WHERE indr"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"SELECT count(*) FILTER (WHERE customer_id < 1 OR customer_id > 50000) AS out_of_range, min(customer_id), max(customer_id), count(*) FROM orders;\\\" ; bash scripts/db-ro.sh \\\"SELECT pid, usename, application_name, state, now()-xact_start AS xact_age, wait_event_typ"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat k8s/shop.yaml; ls scripts ..; bash scripts/db-ro.sh \\\"SELECT pid, usename, backend_type, backend_start, xact_start FROM pg_stat_activity; SHOW lock_timeout; SHOW max_connections;\\\"\", \"description\": \"Read app deployment and session info\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"SELECT pid, usename, backend_type, backend_start, xact_start, state FROM pg_stat_activity; SHOW lock_timeout; SHOW max_connections;\\\"\", \"description\": \"Show DB sessions and lock settings\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-fk-1.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the foreign key as NOT VALID: catalog-only, no scan of the 10M orders, so it holds its SHARE ROW EXCLUSIVE "
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01Sz8c3vRWfQqyBQgDmyMMaC",
+   "tool_input": {
+    "command": "cat k8s/shop.yaml; ls scripts ..; bash scripts/db-ro.sh \"SELECT pid, usename, backend_type, backend_start, xact_start FROM pg_stat_activity; SHOW lock_timeout; SHOW max_connections;\"",
+    "description": "Read app deployment and session info"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-fk-1.json`. It has three SQL steps and needs no app deploys. It only reads data and adds a constraint, so no rows are changed. I haven't run it.\n\n1. **Add the foreign key without checking existing rows yet.** This adds `orders_customer_id_fkey` as `NOT VALID`, which only changes the table definition and doesn't scan the 10M orders. It locks inserts on both tables for a few milliseconds. To keep the app from piling up behind it, each try waits at most 200 ms for its lock and gives up, and the step retries up to 60 times. From this point on, every new order is checked. If the constraint already exists, the step does nothing, so it can be re-run safely.\n2. **Check the existing rows.** `VALIDATE CONSTRAINT` scans all the orders, but its locks don't block the app's reads or inserts, so traffic keeps flowing while it runs. I turned off its statement timeout because the scan may be slow.\n3. **Confirm it worked.** The plan stops with an error unless the constraint exists and is marked as validated.\n\n**What I checked on the live database:**\n- No foreign keys exist yet.\n- Customer ids run 1\u201350000 with no gaps, and every order's `customer_id` falls in that range. Step 2 should therefore succeed. If it did fail, it would change no data and leave the constraint enforcing new orders only.\n\n**Things to know:**\n- **Orders for unknown customers will start failing.** Once step 1 runs, an order whose customer id doesn't exist returns a 500 error from the app. That's what the foreign key is for, but it will show up as errors if any client sends bad ids.\n- **There's no index on `orders.customer_id`.** The foreign key works without one. However, deleting a customer or changing a customer's id would then scan all 10M orders. The app never does either. I left the index out of this plan to keep it to the task; it would also speed up `/customer/C`. If you want it, it can be added later with `CREATE INDEX CONCURRENTLY`, which doesn't block traffic."
+}

@@ -1,0 +1,58 @@
+[
+ {
+  "note": "new bigint column",
+  "kind": "sql",
+  "start": 1792489189.6205838,
+  "end": 1792489190.0504844,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "trigger keeps it in sync for new and updated rows",
+  "kind": "sql",
+  "start": 1792489190.0504844,
+  "end": 1792489190.370576,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "backfill in batches",
+  "kind": "sql",
+  "start": 1792489190.370576,
+  "end": 1792489252.1898324,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "customer_id_new: NOT NULL via a validated CHECK",
+  "kind": "sql",
+  "start": 1792489252.1914399,
+  "end": 1792489252.4616783,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "validate the check (scans, but doesn't block writes)",
+  "kind": "sql",
+  "start": 1792489252.4616783,
+  "end": 1792489260.435681,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL (instant: the check proves it), drop the check",
+  "kind": "sql",
+  "start": 1792489260.435681,
+  "end": 1792489260.8291013,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "swap the columns in one short transaction",
+  "kind": "sql",
+  "start": 1792489260.8291013,
+  "end": 1792489261.1719768,
+  "ok": true,
+  "output": ""
+ }
+]

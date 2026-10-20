@@ -1,0 +1,50 @@
+[
+ {
+  "note": "Make the app store '' instead of NULL for new guest orders, so nothing new adds NULLs.",
+  "kind": "deploy",
+  "start": 1792516618.2537165,
+  "end": 1792516622.0021713,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let the terminating old pods finish any in-flight (NULL-email) inserts.",
+  "kind": "wait",
+  "start": 1792516622.0021713,
+  "end": 1792516632.00687,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill the 2.5M existing NULL emails with '' in id-range batches of 50k, committing each batch (short transactions, no long row locks, readable progress). The app never updates existing rows, so nothing contends. A final sweep catches any stragglers.",
+  "kind": "sql",
+  "start": 1792516632.00687,
+  "end": 1792516658.4307911,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID: catalog-only, needs ACCESS EXCLUSIVE only for an instant. lock_timeout 1s with retries so we never queue in front of app queries for long.",
+  "kind": "sql",
+  "start": 1792516658.4307911,
+  "end": 1792516658.7106345,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint: full scan of 10M rows under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts.",
+  "kind": "sql",
+  "start": 1792516658.7106345,
+  "end": 1792516660.0372195,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL: Postgres 17 uses the validated CHECK to skip the table scan, so the ACCESS EXCLUSIVE lock is momentary. Then drop the now-redundant CHECK. Both retried with a 1s lock_timeout.",
+  "kind": "sql",
+  "start": 1792516660.0375266,
+  "end": 1792516660.346721,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,162 @@
+[
+ {
+  "note": "Trigger function that copies customer_id into customer_id_new on every insert (and on any update of customer_id).",
+  "kind": "sql",
+  "start": 1792495297.1402147,
+  "end": 1792495297.5200117,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add a nullable bigint column customer_id_new (metadata only, no table rewrite) and the sync trigger in one transaction, so every row inserted from now on has it filled. Short lock_timeout with retries, so the app's queries never queue behind this for long.",
+  "kind": "sql",
+  "start": 1792495297.5200117,
+  "end": 1792495297.9165761,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill customer_id_new for ids 1..1000000, 100000 rows per statement (row locks on existing rows only; the app never updates orders).",
+  "kind": "sql",
+  "start": 1792495297.9165761,
+  "end": 1792495302.7969534,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1000001..2000000.",
+  "kind": "sql",
+  "start": 1792495302.7969534,
+  "end": 1792495307.7015796,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2000001..3000000.",
+  "kind": "sql",
+  "start": 1792495307.7015796,
+  "end": 1792495312.6224546,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 3000001..4000000.",
+  "kind": "sql",
+  "start": 1792495312.6224546,
+  "end": 1792495317.6178024,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4000001..5000000.",
+  "kind": "sql",
+  "start": 1792495317.6178024,
+  "end": 1792495322.6291568,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5000001..6000000.",
+  "kind": "sql",
+  "start": 1792495322.6291568,
+  "end": 1792495329.274367,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6000001..7000000.",
+  "kind": "sql",
+  "start": 1792495329.274367,
+  "end": 1792495335.3868709,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7000001..8000000.",
+  "kind": "sql",
+  "start": 1792495335.3868709,
+  "end": 1792495340.4764214,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8000001..9000000.",
+  "kind": "sql",
+  "start": 1792495340.4764214,
+  "end": 1792495345.4675071,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 9000001..10000000.",
+  "kind": "sql",
+  "start": 1792495345.4675071,
+  "end": 1792495350.4339263,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill the rest: orders the app inserted before the trigger existed (ids above 10000000). Later inserts are filled by the trigger.",
+  "kind": "sql",
+  "start": 1792495350.4339263,
+  "end": 1792495350.766928,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (customer_id_new IS NOT NULL) NOT VALID: a brief lock and no scan; enforced for new rows from now on. Retries on a short lock_timeout.",
+  "kind": "sql",
+  "start": 1792495350.766928,
+  "end": 1792495406.754978,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check: a full scan under SHARE UPDATE EXCLUSIVE, which does not block the app's reads or inserts. Fails, and stops the plan, if any row was missed.",
+  "kind": "sql",
+  "start": 1792495406.754978,
+  "end": 1792495410.697266,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify every row has customer_id_new = customer_id before the swap; raises, and stops the plan, on any mismatch.",
+  "kind": "sql",
+  "start": 1792495410.697266,
+  "end": 1792495412.9744966,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Swap in one short transaction: SET NOT NULL (no scan; the validated check proves it), drop the trigger, drop the old integer column, rename customer_id_new to customer_id, drop the now-redundant check. All metadata only, so the exclusive lock is held for milliseconds. The app keeps using the name customer_id, so no deploy is needed. Retries on a short lock_timeout.",
+  "kind": "sql",
+  "start": 1792495412.9744966,
+  "end": 1792495413.2556908,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the sync trigger function, no longer used.",
+  "kind": "sql",
+  "start": 1792495413.2556908,
+  "end": 1792495413.5133367,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the result: orders.customer_id is bigint NOT NULL; raises otherwise.",
+  "kind": "sql",
+  "start": 1792495413.5133367,
+  "end": 1792495413.7939777,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Reclaim the dead row versions left by the backfill and refresh statistics (does not block reads or writes).",
+  "kind": "sql",
+  "start": 1792495413.7939777,
+  "end": 1792495418.6895068,
+  "ok": true,
+  "output": ""
+ }
+]

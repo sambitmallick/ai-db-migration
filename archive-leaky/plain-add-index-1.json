@@ -1,0 +1,6 @@
+{"task": "add-index", "steps": [
+  {"note": "Build the index without blocking writes: CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so the app's inserts and reads keep running. It is the only statement in its step because it cannot run inside a transaction block.",
+   "sql": "CREATE INDEX CONCURRENTLY IF NOT EXISTS orders_customer_id_idx ON orders (customer_id);"},
+  {"note": "Check the index exists and is valid. A failed concurrent build leaves an INVALID index behind, and IF NOT EXISTS would skip over it; dividing by zero makes this step fail in that case.",
+   "sql": "SELECT 1 / (SELECT count(*) FROM pg_index WHERE indexrelid = 'orders_customer_id_idx'::regclass AND indisvalid AND indisready)::int AS index_ok;"}
+]}

@@ -1,0 +1,71 @@
+{
+ "run": "live-rename-amount-1",
+ "task": "rename-amount",
+ "mode": "live",
+ "prompt": "/migrate rename-amount plans/live-rename-amount-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 203,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 32,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\rename-amount\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); \\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"select tgname, tgrelid::regclass from pg_trigger where not tgisinternal; select schemaname, viewname from pg_views where schemaname not in ('pg_catalog','information_schema'); select "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version();\\\" ; bash scripts/db-ro.sh \\\"select column_name, data_type, numeric_precision, numeric_scale, is_nullable, column_default from information_schema.columns where table_name='orders' order by ordinal_position; select indexdef from pg_indexes where t"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version(); select column_name, data_type, numeric_precision, numeric_scale, is_nullable from information_schema.columns where table_name='orders' order by ordinal_position; select indexdef from pg_indexes where tablename='orders'; select conname, pg_get_co"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"explain (analyze, buffers) SELECT id, amount FROM orders WHERE customer_id = 123 ORDER BY id DESC LIMIT 10; select setting, boot_val, reset_val, source from pg_settings where name='statement_timeout'; select * from pg_db_role_setting; select pg_size_pretty(pg_rel"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"python -I - <<'EOF'\\nimport json\\nlock_retry = lambda body: (\\\"DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); \\\"\\n  + body + \\\" EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-rename-amount-1.json\", \"content\": \"{\\n  \\\"task\\\": \\\"rename-amount\\\",\\n  \\\"steps\\\": [\\n    {\\n      \\\"note\\\": \\\"Create the trigger function that keeps amount and total equal on every insert/update, whic"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_019sEbvH2B8dDWen5XXray33",
+   "tool_input": {
+    "command": "bash scripts/db-ro.sh \"select version();\" ; bash scripts/db-ro.sh \"select column_name, data_type, numeric_precision, numeric_scale, is_nullable, column_default from information_schema.columns where table_name='orders' order by ordinal_position; select indexdef from pg_indexes where tablename='orders'; select conname, pg_get_constraintdef(oid) from pg_constraint where conrelid='orders'::regclass; select nspname from pg_namespace; select classid::regclass, objid, deptype from pg_depend where refobjid='orders'::regclass and refobjsubid=3; select name, setting from pg_settings where name in ('lock_timeout','idle_in_transaction_session_timeout','autovacuum','max_wal_size'); select relname from pg_class where relkind in ('r','v','m') and relnamespace not in (select oid from pg_namespace where nspname in ('pg_catalog','information_schema','pg_toast'));\"; ls ../plans ../harness ../tasks 2>/dev/null; ls plans tasks",
+    "description": "Inspect columns, indexes, constraints, dependencies"
+   }
+  },
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_011UX8pnTm72Lp9ZDZEd2E4a",
+   "tool_input": {
+    "command": "python -I - <<'EOF'\nimport json\nlock_retry = lambda body: (\"DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); \"\n  + body + \" EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;\")\nsteps = []\nsteps.append({\"note\": \"Create the trigger function that keeps amount and total equal on every insert/update, whichever of the two the writer sets (old app writes amount, new app writes total).\",\n \"sql\": \"CREATE OR REPLACE FUNCTION orders_sync_total() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF TG_OP = 'INSERT' THEN IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; ELSE IF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; END IF; END IF; RETURN NEW; END $f$;\"})\nsteps.append({\"note\": \"Add nullable column total numeric(10,2) (metadata-only, no rewrite) and the sync trigger in one transaction, so every row written from now on has total. Lock taken with a 200 ms lock_timeout and retried, so app queries never queue behind it for long.\",\n \"sql\": lock_retry(\"ALTER TABLE orders ADD COLUMN IF NOT EXISTS total numeric(10,2); CREATE OR REPLACE TRIGGER orders_sync_total BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_total();\")})\nB = 250000\nfor k in range(10):\n    stmts = [\"SET statement_timeout = 0;\"]\n    for j in range(4):\n        a = k*1000000 + j*B\n        stmts.append(f\"UPDATE orders SET total = amount WHERE id > {a} AND id <= {a+B} AND total IS NULL;\")\n        stmts.append(\"SELECT pg_sleep(0.5);\")\n    steps.append({\"note\": f\"Backfill total = amount for ids {k*1000000+1}..{(k+1)*1000000} in 250k-row batches, each committed on its own (row locks only; the app never updates existing orders).\", \"sql\": \" \".join(stmts)})\n    steps.append({\"note\": \"Vacuum so the dead row versions from the last batches are reused instead of bloating the table.\", \"sql\": \"VACUUM orders;\"})\nsteps.append({\"note\": \"Backfill any remaining rows above id 10,000,000 (orders inserted before the trigger existed).\",\n \"sql\": \"SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 10000000 AND total IS NULL;\"})\nsteps.append({\"note\": \"Add CHECK (total IS NOT NULL) as NOT VALID: brief lock, no scan.\",\n \"sql\": lock_retry(\"ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID;\")})\nsteps.append({\"note\": \"Validate the check: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails (and stops the plan) if any row still has NULL total.\",\n \"sql\": \"SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;\"})\nsteps.append({\"note\": \"SET NOT NULL on total (Postgres uses the validated check, so no scan), then drop the now-redundant check. Brief lock, retried.\",\n \"sql\": lock_retry(\"ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_total_not_null;\")})\nsteps.append({\"note\": \"Verify every row has total = amount before switching the app; stops the plan if not.\",\n \"sql\": \"SET statement_timeout = 0; DO $$ BEGIN IF EXISTS (SELECT 1 FROM orders WHERE total IS DISTINCT FROM amount) THEN RAISE EXCEPTION 'total and amount differ'; END IF; END $$;\"})\nsteps.append({\"note\": \"Roll the app over to read and write total. During the rolling update old pods (amount) and new pods (total) coexist safely: the trigger fills whichever column is missing.\",\n \"deploy\": {\"AMOUNT_READ\": \"total\", \"AMOUNT_WRITE\": \"total\", \"GUEST_EMAIL\": \"null\"}})\nsteps.append({\"note\": \"Let terminating old pods finish in-flight requests and close their DB connections.\", \"wait\": 20})\nsteps.append({\"note\": \"Make sure no connection still runs the old app's SQL (which names amount); wait up to 60 s, otherwise stop before dropping anything.\",\n \"sql\": \"DO $$ DECLARE n int; BEGIN FOR i IN 1..60 LOOP SELECT count(*) INTO n FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND query ~ '(customer_id, amount, status|, amount AS amount|SELECT id, amount AS)'; EXIT WHEN n = 0; PERFORM pg_sleep(1); END LOOP; IF n > 0 THEN RAISE EXCEPTION 'old app version still connected (% sessions)', n; END IF; END $$;\"})\nsteps.append({\"note\": \"Final verification that total = amount for every row, then drop the sync trigger and the amount column in one short transaction (metadata-only; lock retried).\",\n \"sql\": \"SET statement_timeout = 0; DO $$ BEGIN IF EXISTS (SELECT 1 FROM orders WHERE total IS DISTINCT FROM amount) THEN RAISE EXCEPTION 'total and amount differ'; END IF; END $$; \"\n   + lock_retry(\"DROP TRIGGER orders_sync_total ON orders; ALTER TABLE orders DROP COLUMN amount;\")})\nsteps.append({\"note\": \"Drop the trigger function and refresh planner statistics.\", \"sql\": \"DROP FUNCTION orders_sync_total(); ANALYZE orders;\"})\nplan = {\"task\": \"rename-amount\", \"steps\": steps}\nopen(\"plans/live-rename-amount-1.json\", \"w\").write(json.dumps(plan, indent=2) + \"\\n\")\nprint(len(steps))\nEOF",
+    "description": "Generate the migration plan JSON file"
+   }
+  }
+ ],
+ "answer": "I've written the plan to `plans/live-rename-amount-1.json`. It's untested: I couldn't parse it as JSON or try it on a copy of the database, because my scripted commands were blocked and only the read-only queries ran. A plain `RENAME COLUMN` would break the app pods still asking for `amount` during the rolling update, so the plan adds `total` alongside `amount`, switches the app over, then drops `amount`:\n\n1. **Add `total` with a sync trigger.** `total numeric(10,2)` is added as a nullable column, which is instant and doesn't rewrite the table. A trigger keeps `amount` and `total` equal on every insert and update, whichever one the app writes. Each step that locks the table gives up after 200 ms and retries, so live queries never wait long behind it.\n2. **Copy the existing data.** All 10 million rows get `total = amount`, in batches of 250k rows with short pauses. A `VACUUM` runs after every million rows so the table doesn't swell. The app never updates old orders, so the copy doesn't block it.\n3. **Make `total` NOT NULL without locking the table.** The plan adds a `CHECK (total IS NOT NULL) NOT VALID` constraint, then validates it, which scans the table without blocking reads or writes. Then it sets `NOT NULL`, which Postgres can do from the validated check without another scan, and drops the check.\n4. **Check the data, then switch the app.** If any row has `total` different from `amount`, the plan stops here. Otherwise it deploys `AMOUNT_READ=total` and `AMOUNT_WRITE=total`. While old and new pods run side by side, the trigger fills in whichever column a pod leaves out, so both work.\n5. **Remove `amount`.** After a 20 s wait, the plan waits up to 60 s more until no database session is still running the old app's queries. It checks `total = amount` one more time, then drops the trigger and the `amount` column (a quick change with no table rewrite), then the trigger function, and refreshes the table statistics.\n\nIf a check fails, the plan stops before anything is lo"
+}

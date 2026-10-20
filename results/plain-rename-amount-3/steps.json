@@ -1,0 +1,114 @@
+[
+ {
+  "note": "Sync function: on insert, fill whichever of amount/total is missing from the other; on update, copy the changed one to the other.",
+  "kind": "sql",
+  "start": 1792504524.5792198,
+  "end": 1792504524.8280807,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add nullable total (metadata-only, no rewrite) and the sync trigger in one transaction, so no row is ever inserted without total. Short lock_timeout with retries so app queries never queue behind the ACCESS EXCLUSIVE lock.",
+  "kind": "sql",
+  "start": 1792504524.8280807,
+  "end": 1792504525.0810752,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill procedure: copies amount to total in 50,000-row id ranges, committing after each batch (short row locks, no long transaction). Every row above the max id it sees was inserted with the trigger in place.",
+  "kind": "sql",
+  "start": 1792504525.0810752,
+  "end": 1792504525.336527,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Run the backfill (on its own so the procedure can COMMIT between batches).",
+  "kind": "sql",
+  "start": 1792504525.336527,
+  "end": 1792504583.483152,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the backfill procedure.",
+  "kind": "sql",
+  "start": 1792504583.483152,
+  "end": 1792504583.7288942,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Clean up the dead tuples from the backfill (plain VACUUM does not block reads or writes).",
+  "kind": "sql",
+  "start": 1792504583.7288942,
+  "end": 1792504598.466297,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "NOT NULL without a long lock, part 1: add CHECK (total IS NOT NULL) NOT VALID (instant, retried on lock timeout).",
+  "kind": "sql",
+  "start": 1792504598.466297,
+  "end": 1792504598.7095368,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Part 2: validate the check. Full scan under SHARE UPDATE EXCLUSIVE, so reads and writes keep going. Fails (and stops the plan, in a safe state) if any row still lacks total.",
+  "kind": "sql",
+  "start": 1792504598.7095368,
+  "end": 1792504600.42186,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Part 3: SET NOT NULL uses the validated check and skips the scan; then drop the now-redundant check. Retried on lock timeout.",
+  "kind": "sql",
+  "start": 1792504600.4233713,
+  "end": 1792504600.6747108,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Switch the app to total. During the rolling update, old pods write amount and new pods write total; the trigger fills in the other column either way, and every row already has both.",
+  "kind": "deploy",
+  "start": 1792504600.6747108,
+  "end": 1792504603.647821,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish draining (3 s shutdown delay plus in-flight requests) before amount goes away.",
+  "kind": "wait",
+  "start": 1792504603.647821,
+  "end": 1792504618.6497111,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Safety check: stop here if any other session is still running a query that mentions amount.",
+  "kind": "sql",
+  "start": 1792504618.6497111,
+  "end": 1792504618.8981004,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Contract: drop the trigger and the amount column in one transaction (retried on lock timeout), then the sync function.",
+  "kind": "sql",
+  "start": 1792504618.8981004,
+  "end": 1792504619.1443095,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the end state: total is numeric(10,2) NOT NULL and amount is gone.",
+  "kind": "sql",
+  "start": 1792504619.1443095,
+  "end": 1792504619.4255328,
+  "ok": true,
+  "output": ""
+ }
+]

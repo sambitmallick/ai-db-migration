@@ -1,0 +1,46 @@
+{
+ "task": "add-index",
+ "label": "live-add-index-1",
+ "plan": "plans/live-add-index-1.json",
+ "steps": 3,
+ "steps_run": 3,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 11.3,
+ "baseline": {
+  "requests": 1355,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 17,
+  "max_ms": 113
+ },
+ "during": {
+  "requests": 700,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 56,
+  "max_ms": 86
+ },
+ "after": {
+  "requests": 1838,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 12,
+  "max_ms": 57
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.1,
+  "during_rps": 61.7,
+  "after_rps": 61.3
+ },
+ "traffic_ok": true,
+ "checks_passed": 5,
+ "checks": 5,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

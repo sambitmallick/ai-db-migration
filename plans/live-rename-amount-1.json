@@ -1,0 +1,103 @@
+{
+  "task": "rename-amount",
+  "steps": [
+    {
+      "note": "Create the trigger function that keeps amount and total equal on every insert/update, whichever of the two the writer sets (old app writes amount, new app writes total).",
+      "sql": "CREATE OR REPLACE FUNCTION orders_sync_total() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN IF TG_OP = 'INSERT' THEN IF NEW.total IS NULL THEN NEW.total := NEW.amount; ELSIF NEW.amount IS NULL THEN NEW.amount := NEW.total; END IF; ELSE IF NEW.amount IS DISTINCT FROM OLD.amount AND NEW.total IS NOT DISTINCT FROM OLD.total THEN NEW.total := NEW.amount; ELSIF NEW.total IS DISTINCT FROM OLD.total AND NEW.amount IS NOT DISTINCT FROM OLD.amount THEN NEW.amount := NEW.total; END IF; END IF; RETURN NEW; END $f$;"
+    },
+    {
+      "note": "Add nullable column total numeric(10,2) (metadata-only, no rewrite) and the sync trigger in one transaction, so every row written from now on has total. The lock is taken with a 200 ms lock_timeout and retried, so app queries never queue behind it for long.",
+      "sql": "DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD COLUMN IF NOT EXISTS total numeric(10,2); CREATE OR REPLACE TRIGGER orders_sync_total BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_total(); EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"
+    },
+    {
+      "note": "Backfill total = amount for ids 1..1,000,000 in 250k-row batches, each committed on its own (row locks only; the app never updates existing orders).",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 0 AND id <= 250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 250000 AND id <= 500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 500000 AND id <= 750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 750000 AND id <= 1000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum so the dead row versions from the backfill are reused instead of bloating the table.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 1,000,001..2,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 1000000 AND id <= 1250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 1250000 AND id <= 1500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 1500000 AND id <= 1750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 1750000 AND id <= 2000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 2,000,001..3,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 2000000 AND id <= 2250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 2250000 AND id <= 2500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 2500000 AND id <= 2750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 2750000 AND id <= 3000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 3,000,001..4,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 3000000 AND id <= 3250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 3250000 AND id <= 3500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 3500000 AND id <= 3750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 3750000 AND id <= 4000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 4,000,001..5,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 4000000 AND id <= 4250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 4250000 AND id <= 4500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 4500000 AND id <= 4750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 4750000 AND id <= 5000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 5,000,001..6,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 5000000 AND id <= 5250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 5250000 AND id <= 5500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 5500000 AND id <= 5750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 5750000 AND id <= 6000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 6,000,001..7,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 6000000 AND id <= 6250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 6250000 AND id <= 6500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 6500000 AND id <= 6750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 6750000 AND id <= 7000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 7,000,001..8,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 7000000 AND id <= 7250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 7250000 AND id <= 7500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 7500000 AND id <= 7750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 7750000 AND id <= 8000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 8,000,001..9,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 8000000 AND id <= 8250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 8250000 AND id <= 8500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 8500000 AND id <= 8750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 8750000 AND id <= 9000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill ids 9,000,001..10,000,000.",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 9000000 AND id <= 9250000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 9250000 AND id <= 9500000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 9500000 AND id <= 9750000 AND total IS NULL; SELECT pg_sleep(0.5); UPDATE orders SET total = amount WHERE id > 9750000 AND id <= 10000000 AND total IS NULL; SELECT pg_sleep(0.5);"
+    },
+    { "note": "Vacuum.", "sql": "VACUUM orders;" },
+    {
+      "note": "Backfill whatever is left above id 10,000,000 (orders inserted before the trigger existed; later ones already have total).",
+      "sql": "SET statement_timeout = 0; UPDATE orders SET total = amount WHERE id > 10000000 AND total IS NULL;"
+    },
+    {
+      "note": "Add CHECK (total IS NOT NULL) as NOT VALID: brief lock, no scan, retried on lock timeout.",
+      "sql": "DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ADD CONSTRAINT orders_total_not_null CHECK (total IS NOT NULL) NOT VALID; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"
+    },
+    {
+      "note": "Validate the check: a full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails (and stops the plan) if any row still has a NULL total.",
+      "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_total_not_null;"
+    },
+    {
+      "note": "SET NOT NULL on total (Postgres proves it from the validated check, so no scan), then drop the redundant check. Brief lock, retried.",
+      "sql": "DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ALTER COLUMN total SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_total_not_null; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"
+    },
+    {
+      "note": "Verify every row has total = amount before switching the app; stops the plan if not.",
+      "sql": "SET statement_timeout = 0; DO $$ BEGIN IF EXISTS (SELECT 1 FROM orders WHERE total IS DISTINCT FROM amount) THEN RAISE EXCEPTION 'total and amount differ'; END IF; END $$;"
+    },
+    {
+      "note": "Roll the app over to read and write total. While old pods (amount) and new pods (total) coexist during the rolling update, the trigger fills whichever column a writer leaves out, so both stay correct.",
+      "deploy": { "AMOUNT_READ": "total", "AMOUNT_WRITE": "total", "GUEST_EMAIL": "null" }
+    },
+    {
+      "note": "Let terminating old pods finish their in-flight requests and close their database connections.",
+      "wait": 20
+    },
+    {
+      "note": "Make sure no connection is still running the old app's SQL (which names amount); wait up to 60 s, otherwise stop before anything is dropped.",
+      "sql": "DO $$ DECLARE n int; BEGIN FOR i IN 1..60 LOOP SELECT count(*) INTO n FROM pg_stat_activity WHERE pid <> pg_backend_pid() AND query ~ '(customer_id, amount, status|, amount AS amount|SELECT id, amount AS)'; EXIT WHEN n = 0; PERFORM pg_sleep(1); END LOOP; IF n > 0 THEN RAISE EXCEPTION 'old app version still connected (% sessions)', n; END IF; END $$;"
+    },
+    {
+      "note": "Check total = amount for every row one last time, then drop the sync trigger and the amount column in one short metadata-only transaction (lock retried).",
+      "sql": "SET statement_timeout = 0; DO $$ BEGIN IF EXISTS (SELECT 1 FROM orders WHERE total IS DISTINCT FROM amount) THEN RAISE EXCEPTION 'total and amount differ'; END IF; END $$; DO $$ DECLARE tries int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); DROP TRIGGER orders_sync_total ON orders; ALTER TABLE orders DROP COLUMN amount; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.5); END; END LOOP; END $$;"
+    },
+    {
+      "note": "Drop the trigger function and refresh planner statistics.",
+      "sql": "DROP FUNCTION orders_sync_total(); ANALYZE orders;"
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+$ bash experiment/run_ai.sh plain 3
+{"run": "plain-add-index-1", "seconds": 44, "plan_written": true, "plan_valid": true, "steps": 2, "denials": 0, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[16:13:31] RESULT plain-add-index-1: plan completed in 8.3s | during: 0/514 failed, p99 97 ms | after: 0/1845 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "plain-add-index-2", "seconds": 73, "plan_written": true, "plan_valid": true, "steps": 4, "denials": 1, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[16:16:37] RESULT plain-add-index-2: plan completed in 7.7s | during: 0/475 failed, p99 65 ms | after: 0/1844 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "plain-add-index-3", "seconds": 38, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 0, "tools": 5}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[16:19:09] RESULT plain-add-index-3: plan completed in 7.3s | during: 0/445 failed, p99 47 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "plain-rename-amount-1", "seconds": 105, "plan_written": true, "plan_valid": true, "steps": 9, "denials": 1, "tools": 11}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[16:24:20] RESULT plain-rename-amount-1: plan completed in 94.8s | during: 0/5844 failed, p99 48 ms | after: 0/1846 failed | lock waiters max 0, longest wait 0.0s | checks 7/7 []
+{"run": "plain-rename-amount-2", "seconds": 169, "plan_written": true, "plan_valid": true, "steps": 15, "denials": 2, "tools": 10}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[16:31:12] RESULT plain-rename-amount-2: plan completed in 130.8s | during: 0/8061 failed, p99 292 ms | after: 0/1845 failed | lock waiters max 20, longest wait 37.41s | checks 7/7 []
+{"run": "plain-rename-amount-3", "seconds": 101, "plan_written": true, "plan_valid": true, "steps": 6, "denials": 2, "tools": 9}
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[16:35:04] RESULT plain-rename-amount-3: plan completed in 19.6s | during: 0/1205 failed, p99 12 ms | after: 0/1842 failed | lock waiters max 0, longest wait 0.0s | checks 7/7 []
+{"run": "plain-customer-bigint-1", "seconds": 206, "plan_written": true, "plan_valid": true, "steps": 18, "denials": 3, "tools": 12}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 4
+[16:41:32] RESULT plain-customer-bigint-1: plan completed in 62.3s | during: 0/3841 failed, p99 37 ms | after: 0/1836 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "plain-customer-bigint-2", "seconds": 150, "plan_written": true, "plan_valid": true, "steps": 18, "denials": 1, "tools": 5}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[16:47:15] RESULT plain-customer-bigint-2: plan completed in 72.3s | during: 0/4459 failed, p99 57 ms | after: 0/1844 failed | lock waiters max 1, longest wait 0.97s | checks 4/4 []
+{"run": "plain-customer-bigint-3", "seconds": 189, "plan_written": true, "plan_valid": true, "steps": 20, "denials": 1, "tools": 7}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[16:54:26] RESULT plain-customer-bigint-3: plan completed in 121.5s | during: 0/7485 failed, p99 206 ms | after: 0/1839 failed | lock waiters max 14, longest wait 54.98s | checks 4/4 []
+{"run": "plain-email-not-null-1", "seconds": 73, "plan_written": true, "plan_valid": true, "steps": 8, "denials": 1, "tools": 5}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[16:58:26] RESULT plain-email-not-null-1: plan completed in 52.8s | during: 0/3249 failed, p99 262 ms | after: 0/1839 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "plain-email-not-null-2", "seconds": 92, "plan_written": true, "plan_valid": true, "steps": 7, "denials": 1, "tools": 9}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[17:02:39] RESULT plain-email-not-null-2: plan completed in 43.4s | during: 0/2674 failed, p99 642 ms | after: 0/1840 failed | lock waiters max 1, longest wait 0.08s | checks 5/5 []
+{"run": "plain-email-not-null-3", "seconds": 96, "plan_written": true, "plan_valid": true, "steps": 6, "denials": 1, "tools": 6}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[17:07:00] RESULT plain-email-not-null-3: plan completed in 38.7s | during: 0/2385 failed, p99 143 ms | after: 0/1841 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+{"run": "plain-customer-fk-1", "seconds": 70, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 0, "tools": 6}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[17:10:14] RESULT plain-customer-fk-1: plan completed in 3.5s | during: 0/218 failed, p99 31 ms | after: 0/1838 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "plain-customer-fk-2", "seconds": 71, "plan_written": true, "plan_valid": true, "steps": 4, "denials": 1, "tools": 5}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[17:13:38] RESULT plain-customer-fk-2: plan completed in 5.2s | during: 0/318 failed, p99 9 ms | after: 0/1839 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+{"run": "plain-customer-fk-3", "seconds": 86, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 1, "tools": 5}
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[17:17:15] RESULT plain-customer-fk-3: plan completed in 3.6s | during: 0/225 failed, p99 22 ms | after: 0/1839 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[exit 0, 3986s]

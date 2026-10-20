@@ -1,0 +1,19 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Roll the app so guest orders store '' instead of NULL. From here on the app never writes a NULL email.",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+
+  {"note": "Let terminating old pods finish their in-flight requests (3 s drain + in-flight work), so no NULL insert is still on its way.",
+   "wait": 15},
+
+  {"note": "Add CHECK (email IS NOT NULL) NOT VALID: blocks any new NULL without scanning the table. Needs a brief ACCESS EXCLUSIVE lock, so take it with a 300 ms lock_timeout and retry, never queueing app queries for long.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '300ms', true); FOR i IN 1..60 LOOP BEGIN ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders to add the check constraint'; END $$;"},
+
+  {"note": "Backfill: set email = '' on existing guest orders, in id ranges of 50,000 (~12,500 rows), committing each batch and pausing briefly. Only NULL emails are touched; no other column or row changes. The app never updates orders, so the row locks block nothing. Upper bound is max(id) now: the constraint guarantees no newer row can be NULL.",
+   "sql": "DO $$ DECLARE lo bigint := 0; hi bigint; BEGIN SELECT coalesce(max(id), 0) INTO hi FROM orders; WHILE lo < hi LOOP UPDATE orders SET email = '' WHERE id > lo AND id <= lo + 50000 AND email IS NULL; COMMIT; lo := lo + 50000; PERFORM pg_sleep(0.05); END LOOP; END $$;"},
+
+  {"note": "Validate the constraint. Scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts. Fails (and stops the plan, harmlessly) if any NULL is left.",
+   "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL (no table scan: Postgres uses the valid check constraint as proof), then drop the now-redundant check, in one short transaction. Same lock_timeout + retry so app queries are never stuck behind the lock.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '300ms', true); FOR i IN 1..60 LOOP BEGIN ALTER TABLE orders ALTER COLUMN email SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_email_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(1); END; END LOOP; RAISE EXCEPTION 'could not lock orders to set NOT NULL'; END $$;"}
+]}

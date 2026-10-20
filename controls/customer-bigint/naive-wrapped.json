@@ -1,0 +1,10 @@
+{
+ "task": "customer-bigint",
+ "by": "control (naive, wrapped in a DO block)",
+ "steps": [
+  {
+   "note": "the same ALTER COLUMN TYPE, inside a DO block",
+   "sql": "DO $$ BEGIN EXECUTE 'ALTER TABLE orders ALTER COLUMN customer_id TYPE bigint'; END $$;"
+  }
+ ]
+}

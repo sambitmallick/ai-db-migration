@@ -1,0 +1,26 @@
+{
+ "run": "plain-customer-fk-2",
+ "task": "customer-fk",
+ "mode": "plain",
+ "prompt": "/migrate customer-fk plans/plain-customer-fk-2.json",
+ "seconds": 59,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat tasks/customer-fk/task.md && ls tasks/customer-fk plans && cat db/seed.sql && cat app/server.js && cat k8s/shop.yaml && cat scripts/db-ro.sh\", \"description\": \"Read task, schema, app, and deploy files\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"\\nSELECT count(*) AS orphans FROM orders o WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.id=o.customer_id);\\\" ; bash scripts/db-ro.sh \\\"SELECT conrelid::regclass, conname, pg_get_constraintdef(oid), convalidated FROM pg_constraint WHERE conrelid IN ('orders"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-fk-2.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the foreign key as NOT VALID: from now on every new or updated order must reference an existing customer, "
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I've written the plan to `plans/plain-customer-fk-2.json`. It has three SQL steps and doesn't redeploy the app, because the app needs no changes. I haven't run it.\n\n1. **Add the foreign key without checking existing rows.** `orders.customer_id \u2192 customers.id` is added as `NOT VALID`, so it applies to new and updated orders straight away. This needs a lock that pauses order inserts, but only for a moment. The step gives up on the lock after 500 ms and tries again, up to 60 times, so app inserts (which time out after 2 s) don't pile up behind it. If the key already exists, the step does nothing.\n2. **Check the existing 10M orders.** `VALIDATE CONSTRAINT` scans them under a weaker lock, so the app keeps reading and writing during the scan. The step has no time limit.\n3. **Confirm** the key exists and is marked as checked.\n\n**Missing customers:** right now no order points at a missing customer (I counted 0). The app does accept any customer id, though, so a bad order could arrive before step 1 runs. If that happens, step 2 fails and the plan stops. The key still blocks new bad orders, and the bad rows are left for you to decide on: the plan doesn't delete orders or invent customers.\n\n**Index not included:** the plan adds no index on `orders.customer_id`, since the task doesn't ask for one. Without it, deleting or changing a customer's id means scanning all 10M orders, which the app never does. The `/customer` endpoint is already slow for the same reason."
+}

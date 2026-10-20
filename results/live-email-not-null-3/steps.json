@@ -1,0 +1,58 @@
+[
+ {
+  "note": "Roll the app so new guest orders store '' instead of NULL. The column is still nullable, so old and new pods can run side by side during the rolling update.",
+  "kind": "deploy",
+  "start": 1792511839.881791,
+  "end": 1792511845.3760467,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let any request that was still in flight on an old pod finish and commit.",
+  "kind": "wait",
+  "start": 1792511845.3760467,
+  "end": 1792511855.3783984,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID: catalog-only, but needs a brief ACCESS EXCLUSIVE lock. Take it with a 200 ms lock_timeout and retry, so app queries never queue behind it for long. From here on no new NULL can be written.",
+  "kind": "sql",
+  "start": 1792511855.3783984,
+  "end": 1792511855.825938,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill: set email = '' only where it is NULL (the guest orders), in id ranges of 100,000 rows with a commit after each, so transactions and row locks stay short. The app never updates orders, so it never waits on these row locks. Rows that already have an email are not touched.",
+  "kind": "sql",
+  "start": 1792511855.825938,
+  "end": 1792511880.4080472,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check constraint. This scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. It fails (and stops the plan, with nothing broken) if any NULL is left.",
+  "kind": "sql",
+  "start": 1792511880.4080472,
+  "end": 1792511887.3772142,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL. Postgres sees the valid CHECK (email IS NOT NULL) and skips the full-table scan, so the ACCESS EXCLUSIVE lock lasts only a moment. Same lock_timeout and retry as before.",
+  "kind": "sql",
+  "start": 1792511887.3772142,
+  "end": 1792511887.9640007,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the helper CHECK constraint now that the column itself is NOT NULL (brief lock, same retry).",
+  "kind": "sql",
+  "start": 1792511887.9640007,
+  "end": 1792511888.461867,
+  "ok": true,
+  "output": ""
+ }
+]

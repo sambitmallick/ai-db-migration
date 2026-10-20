@@ -1,0 +1,16 @@
+# Live traffic during a migration: 60 requests/s for 150 s, from inside the cluster.
+apiVersion: batch/v1
+kind: Job
+metadata: { name: loadgen }
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: loadgen
+          image: localhost/shop-db:1.0
+          imagePullPolicy: Never
+          command: ["node", "loadgen.js"]
+          env: [{ name: RATE, value: "60" }, { name: SECONDS, value: "150" }]
+          resources: { requests: { cpu: 200m, memory: 64Mi }, limits: { memory: 256Mi } }

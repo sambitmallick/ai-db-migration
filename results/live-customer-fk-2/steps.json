@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Add the foreign key as NOT VALID: new and updated orders are checked from now on, existing rows are not scanned. It needs a brief SHARE ROW EXCLUSIVE lock on orders and customers (blocks inserts, not reads), so take it with a short lock_timeout and retry, so a queued ALTER never stalls inserts for more than 200 ms.",
+  "kind": "sql",
+  "start": 1792512387.0757918,
+  "end": 1792512387.5410726,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing 10M rows. VALIDATE takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so reads and inserts carry on while it scans. No statement timeout for this long scan.",
+  "kind": "sql",
+  "start": 1792512387.5410726,
+  "end": 1792512390.3160315,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check that the constraint exists and is validated; fail the plan otherwise.",
+  "kind": "sql",
+  "start": 1792512390.3160315,
+  "end": 1792512390.7569566,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,47 @@
+{
+ "run": "plain-email-not-null-3",
+ "task": "email-not-null",
+ "mode": "plain",
+ "prompt": "/migrate email-not-null plans/plain-email-not-null-3.json",
+ "seconds": 96,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 6,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/email-not-null/task.md && echo ---- && cat db/seed.sql && echo ---- && cat app/server.js && echo ---- && cat k8s/shop.yaml && ls plans tasks\", \"description\": \"Read task, schema, app, and deployment\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); select max(id), min(id) from orders; \\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select conname, contype, pg_get_constraintdef(oid) from pg_constraint "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select version()\\\"; bash scripts/db-ro.sh \\\"select max(id), min(id) from orders\\\"; bash scripts/db-ro.sh \\\"select indexrelid::regclass, pg_get_indexdef(indexrelid) from pg_index where in"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && for lo in 0 2000000 4000000 6000000 8000000 10000000; do bash scripts/db-ro.sh \\\"select $lo as lo, count(*) filter (where email is null) nulls, count(*) filter (where email='') empties from orders where id > $l"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select count(*) filter (where email is null) nulls, count(*) filter (where email='') empties from orders where id <= 2000000\\\"\", \"description\": \"Count null and empty emails in first 2M o"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-email-not-null-3.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Make the app store '' instead of NULL for guest orders; the rolling update finishes before the next step"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01FzoVEyR59iZ297b32MGJYe",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && for lo in 0 2000000 4000000 6000000 8000000 10000000; do bash scripts/db-ro.sh \"select $lo as lo, count(*) filter (where email is null) nulls, count(*) filter (where email='') empties from orders where id > $lo and id <= $lo+2000000\"; done; bash scripts/db-ro.sh \"select n_live_tup, n_dead_tup, last_autovacuum, n_tup_upd from pg_stat_user_tables where relname='orders'\"",
+    "description": "Count null and empty emails across id ranges"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-email-not-null-3.json`. It hasn't been run or tested. It makes `orders.email` NOT NULL without blocking the app:\n\n1. **Deploy `GUEST_EMAIL=empty`**, then wait 10s so old pods finish their last requests. After that, new guest orders store `''`.\n2. **Add `CHECK (email IS NOT NULL) NOT VALID`.** From this point no new NULL can be written, and it doesn't scan the table.\n3. **Change existing NULLs to `''`** in batches of 50,000 ids, committing after each batch. That keeps every transaction short and never locks the whole table.\n4. **Validate the check.** This scans the full table, but reads and writes keep going while it runs.\n5. **`SET NOT NULL`, then drop the check.** On Postgres 17, a validated check means this skips the scan, so the full table lock lasts only a moment.\n\nSteps 2 and 5 need that full table lock briefly. Each one tries for 100ms at a time and retries, so it never makes app queries wait behind it.\n\n- **Batch step must run on its own.** It commits from inside a `DO` block, which only works because it is the only statement in its step. If the runner wraps steps in a transaction, that step will fail.\n- **Live data differs from the seed.** The live database already has `''` where guest emails would be NULL (I checked ids up to 2M and above 9M). `db/seed.sql` says the database is reset before every migration, so I planned for 2.5M NULL rows.\n- **Safe to re-run.** If the data is already filled in, the batches just change nothing."
+}

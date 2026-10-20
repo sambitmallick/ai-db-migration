@@ -1,0 +1,24 @@
+$ podman build -t localhost/shop-db:1.0 app/
+STEP 1/6: FROM docker.io/library/node:24-alpine
+STEP 2/6: WORKDIR /app
+--> Using cache db5d3b5cba4a5e56a53d3040f93e667bcc9e97f1ef3a99341e39c42bfb6717b6
+--> db5d3b5cba4a
+STEP 3/6: COPY package.json ./
+--> 293138baa6d3
+STEP 4/6: RUN npm install --omit=dev --no-audit --no-fund
+
+added 14 packages in 1s
+npm notice
+npm notice New major version of npm available! 11.19.1 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice
+--> 7e29c0544b90
+STEP 5/6: COPY server.js loadgen.js ./
+--> 74e84fb07518
+STEP 6/6: CMD ["node", "server.js"]
+COMMIT localhost/shop-db:1.0
+--> e96d609e8b8f
+Successfully tagged localhost/shop-db:1.0
+e96d609e8b8fb2d19a80285976060079b216c0155e720ba9f416c69346ff764b
+[exit 0, 4s]

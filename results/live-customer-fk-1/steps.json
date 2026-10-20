@@ -1,0 +1,34 @@
+[
+ {
+  "note": "Pre-check: refuse to go on if any order references a missing customer (live DB has 0 today). Nothing is deleted or changed; the plan just stops.",
+  "kind": "sql",
+  "start": 1792512139.593353,
+  "end": 1792512141.4025645,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add the FK as NOT VALID: catalog-only, no table scan. Needs a brief SHARE ROW EXCLUSIVE lock on orders and customers, so take it with a short lock_timeout and retry, never queueing in front of app traffic for more than 200 ms. From here on every new or updated order is checked.",
+  "kind": "sql",
+  "start": 1792512141.4025645,
+  "end": 1792512141.8409355,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate existing rows. VALIDATE takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so reads and inserts keep running during the scan of 10M rows.",
+  "kind": "sql",
+  "start": 1792512141.8409355,
+  "end": 1792512144.153642,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the constraint exists and is validated; fail the step otherwise.",
+  "kind": "sql",
+  "start": 1792512144.153642,
+  "end": 1792512144.5551877,
+  "ok": true,
+  "output": ""
+ }
+]

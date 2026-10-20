@@ -1,0 +1,74 @@
+$ bash experiment/run_ai.sh plain 3 add-index rename-amount customer-bigint email-not-null customer-fk drop-status
+[18:57:48] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-add-index-1", "seconds": 56, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 1, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[19:00:45] RESULT plain-add-index-1: plan completed in 9.5s | during: 0/584 failed, p99 83 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[19:01:12] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-add-index-2", "seconds": 39, "plan_written": true, "plan_valid": true, "steps": 4, "denials": 0, "tools": 3}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[19:03:47] RESULT plain-add-index-2: plan completed in 7.5s | during: 0/463 failed, p99 41 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[19:04:14] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-add-index-3", "seconds": 72, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 0, "tools": 8}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[19:07:24] RESULT plain-add-index-3: plan completed in 9.0s | during: 0/555 failed, p99 88 ms | after: 0/1844 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[19:07:53] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-rename-amount-1", "seconds": 132, "plan_written": true, "plan_valid": true, "steps": 9, "denials": 1, "tools": 8}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[19:14:51] RESULT plain-rename-amount-1: plan completed in 166.9s | during: 0/10281 failed, p99 195 ms | after: 0/1842 failed | lock waiters max 14, longest wait 58.84s | checks 7/7 []
+[19:15:23] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-rename-amount-2", "seconds": 170, "plan_written": true, "plan_valid": true, "steps": 9, "denials": 1, "tools": 9}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[19:21:31] RESULT plain-rename-amount-2: plan completed in 88.5s | during: 0/5461 failed, p99 71 ms | after: 0/1842 failed | lock waiters max 1, longest wait 0.98s | checks 7/7 []
+[19:22:03] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-rename-amount-3", "seconds": 137, "plan_written": true, "plan_valid": true, "steps": 14, "denials": 1, "tools": 10}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[19:27:43] RESULT plain-rename-amount-3: plan completed in 94.8s | during: 0/5851 failed, p99 106 ms | after: 0/1844 failed | lock waiters max 0, longest wait 0.0s | checks 7/7 []
+[19:28:15] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-customer-bigint-1", "seconds": 132, "plan_written": true, "plan_valid": true, "steps": 16, "denials": 2, "tools": 6}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[19:33:18] RESULT plain-customer-bigint-1: plan completed in 63.2s | during: 0/3905 failed, p99 67 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[19:33:44] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-customer-bigint-2", "seconds": 104, "plan_written": true, "plan_valid": true, "steps": 8, "denials": 1, "tools": 8}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[19:38:30] RESULT plain-customer-bigint-2: plan completed in 71.9s | during: 0/4440 failed, p99 170 ms | after: 0/1843 failed | lock waiters max 2, longest wait 0.09s | checks 4/4 []
+[19:38:58] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-customer-bigint-3", "seconds": 139, "plan_written": true, "plan_valid": true, "steps": 15, "denials": 1, "tools": 10}
+SQUAWK lock risk: none | may break app: ban-drop-function | hygiene: 3
+[19:44:09] RESULT plain-customer-bigint-3: plan completed in 66.5s | during: 0/4106 failed, p99 88 ms | after: 0/1842 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[19:44:36] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-email-not-null-1", "seconds": 91, "plan_written": true, "plan_valid": true, "steps": 11, "denials": 1, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 3
+[19:48:30] RESULT plain-email-not-null-1: plan completed in 38.8s | during: 0/2391 failed, p99 331 ms | after: 0/1842 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[19:49:00] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-email-not-null-2", "seconds": 54, "plan_written": true, "plan_valid": true, "steps": 5, "denials": 1, "tools": 4}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[19:52:12] RESULT plain-email-not-null-2: plan completed in 29.5s | during: 0/1824 failed, p99 245 ms | after: 0/1843 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[19:52:42] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-email-not-null-3", "seconds": 57, "plan_written": true, "plan_valid": true, "steps": 8, "denials": 0, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[19:56:05] RESULT plain-email-not-null-3: plan completed in 38.9s | during: 0/2401 failed, p99 141 ms | after: 0/1842 failed | lock waiters max 0, longest wait 0.0s | checks 5/5 []
+[19:56:39] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-customer-fk-1", "seconds": 58, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 0, "tools": 3}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[19:59:44] RESULT plain-customer-fk-1: plan completed in 3.1s | during: 0/189 failed, p99 75 ms | after: 0/1839 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[20:00:16] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-customer-fk-2", "seconds": 59, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 0, "tools": 3}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[20:03:10] RESULT plain-customer-fk-2: plan completed in 3.6s | during: 0/222 failed, p99 14 ms | after: 0/1840 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[20:03:39] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-customer-fk-3", "seconds": 57, "plan_written": true, "plan_valid": true, "steps": 3, "denials": 1, "tools": 4}
+SQUAWK lock risk: none | may break app: none | hygiene: 1
+[20:06:31] RESULT plain-customer-fk-3: plan completed in 2.6s | during: 0/162 failed, p99 28 ms | after: 0/1840 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[20:07:02] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-drop-status-1", "seconds": 34, "plan_written": true, "plan_valid": true, "steps": 1, "denials": 0, "tools": 6}
+SQUAWK lock risk: none | may break app: none | hygiene: 2
+[20:09:28] RESULT plain-drop-status-1: plan completed in 0.3s | during: 0/16 failed, p99 8 ms | after: 0/1841 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[20:10:00] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-drop-status-2", "seconds": 37, "plan_written": true, "plan_valid": true, "steps": 1, "denials": 0, "tools": 7}
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[20:12:29] RESULT plain-drop-status-2: plan completed in 0.3s | during: 0/16 failed, p99 5 ms | after: 0/1838 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[20:13:00] prepared: fresh seed, original app settings, no audit tables
+{"run": "plain-drop-status-3", "seconds": 52, "plan_written": true, "plan_valid": true, "steps": 0, "denials": 1, "tools": 8}
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[20:15:42] RESULT plain-drop-status-3: plan completed in 0.0s | during: 0/0 failed, p99 0 ms | after: 0/1841 failed | lock waiters max 0, longest wait 0.0s | checks 4/4 []
+[exit 0, 4704s]

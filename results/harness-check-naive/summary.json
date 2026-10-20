@@ -1,0 +1,46 @@
+{
+ "task": "add-index",
+ "label": "harness-check-naive",
+ "plan": "controls/add-index/naive.json",
+ "steps": 1,
+ "steps_run": 1,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 4.2,
+ "baseline": {
+  "requests": 1352,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 34,
+  "max_ms": 104
+ },
+ "during": {
+  "requests": 261,
+  "failed": 80,
+  "failed_writes": 60,
+  "p50_ms": 1448,
+  "p99_ms": 3003,
+  "max_ms": 3007
+ },
+ "after": {
+  "requests": 1844,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 6,
+  "max_ms": 37
+ },
+ "max_sessions_waiting_on_lock": 24,
+ "longest_lock_wait_s": 1.99,
+ "traffic": {
+  "baseline_rps": 61.5,
+  "during_rps": 61.9,
+  "after_rps": 61.5
+ },
+ "traffic_ok": true,
+ "checks_passed": 5,
+ "checks": 5,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

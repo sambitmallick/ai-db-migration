@@ -1,0 +1,42 @@
+{
+ "run": "plain-email-not-null-3",
+ "task": "email-not-null",
+ "mode": "plain",
+ "prompt": "/migrate email-not-null plans/plain-email-not-null-3.json",
+ "seconds": 57,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 8,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\email-not-null\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); select min(id), max(id), count(*) filter (where email is null) from orders; select conname, pg_get_constraintdef(oid) from pg_constraint where con"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-email-not-null-3.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Roll the app to store '' (not NULL) as the email of guest orders. The deploy waits for the rollout, so a"
+  },
+  {
+   "tool": "Grep",
+   "input": "{\"pattern\": \"psql\", \"path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\harness\", \"output_mode\": \"content\"}"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/plain-email-not-null-3.json`. I haven't run it. I only looked at the live database: PostgreSQL 17, about 10M orders, 2.5M of them with a NULL email, and no constraints on `orders` other than the primary key.\n\n1. **Deploy `GUEST_EMAIL=empty`.** The app starts storing `''` for guest orders. The deploy waits for the rollout to finish, so after this step no pod writes a NULL email.\n2. **Add `CHECK (email IS NOT NULL) NOT VALID`.** This applies to new writes right away without scanning the existing rows. It needs a brief exclusive lock, so it tries with a 500 ms lock timeout and retries, which keeps app queries from piling up behind it.\n3. **Backfill.** Existing NULL emails are set to `''` in id ranges of 50,000, committing after each range so every transaction stays short.\n4. **Clean up and validate.** `VACUUM (ANALYZE)` clears the old row versions the backfill leaves behind. `VALIDATE CONSTRAINT` then scans the table without blocking reads or writes, and fails if any NULL is left.\n5. **`SET NOT NULL`.** Postgres 17 treats the validated check as proof that there are no NULLs, so it skips the full-table scan and holds the exclusive lock only for a moment. This uses the same retry approach as step 2. The extra check constraint is then dropped, and a last step confirms the column is NOT NULL.\n\nSteps 3 and 4 depend on each statement in a step running as its own transaction, as the skill describes. The backfill's per-batch `COMMIT` inside a `DO` block and the `VACUUM` both fail if all the statements in a step are sent together in one transaction. I didn't look at the runner (it's outside the workspace) to confirm how it sends them."
+}

@@ -1,0 +1,30 @@
+{
+ "run": "live-customer-fk-2",
+ "task": "customer-fk",
+ "mode": "live",
+ "prompt": "/migrate customer-fk plans/live-customer-fk-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 64,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/customer-fk/task.md && ls tasks/customer-fk plans && cat db/seed.sql && cat app/server.js && cat k8s/shop.yaml && cat scripts/db-ro.sh\", \"description\": \"Read task, schema, app, and deploy files\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"\\\\d customers\\\"; bash scripts/db-ro.sh \\\"select count(*), min(id), max(id) from customers; select count(*), max(id) from orders; select conname, co"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select count(*) filter (where c.id is null) as orphans, min(o.customer_id), max(o.customer_id) from orders o left join customers c on c.id=o.customer_id where o.id > 10000000;\\\" ; bash s"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-fk-2.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the foreign key as NOT VALID: new and updated orders are checked from now on, existing rows are not scanned"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/live-customer-fk-2.json`. I haven't run it or tested it against a copy of the database.\n\n**What the plan does:**\n1. **Adds the foreign key as `NOT VALID`.** New orders get checked against `customers` straight away, but the 10M existing rows aren't scanned yet. This step needs a short lock that holds up inserts but not reads. So it waits at most 200 ms for the lock, and if it doesn't get it, it waits 0.5 s and tries again, up to 100 times. Because of that cap, an insert can only ever be held up for about 200 ms.\n2. **Checks the existing rows (`VALIDATE CONSTRAINT`).** This scans all 10M orders, but its lock doesn't block reads or inserts, so traffic carries on while it runs. The scan step has no time limit.\n3. **Confirms the foreign key exists and is fully checked.** If it isn't, the plan fails.\n\n**What I checked on the live database:** no existing order points to a missing customer, so step 2 won't fail and no data needs fixing. The plan doesn't delete or change any rows, and the app doesn't need redeploying.\n\n**One thing to know:** after step 1, any new order for a customer that doesn't exist will be rejected with an error. That is what the foreign key is for. Recent traffic only uses existing customers, so this shouldn't happen."
+}

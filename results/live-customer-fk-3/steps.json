@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Add the foreign key as NOT VALID: no table scan, only a brief SHARE ROW EXCLUSIVE lock on orders and customers. lock_timeout 500ms so app queries never queue behind us for long (app statement_timeout is 2s); retry up to 60 times if the lock isn't free. New and updated rows are checked from this point on.",
+  "kind": "sql",
+  "start": 1792512661.9621394,
+  "end": 1792512662.4227922,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing 10M rows. VALIDATE takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so app reads and inserts keep running during the scan. No statement timeout for the scan; retry if the lock is briefly held (for example by autovacuum).",
+  "kind": "sql",
+  "start": 1792512662.4227922,
+  "end": 1792512665.4871218,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check that the constraint exists and is validated.",
+  "kind": "sql",
+  "start": 1792512665.4871218,
+  "end": 1792512665.9023056,
+  "ok": true,
+  "output": ""
+ }
+]

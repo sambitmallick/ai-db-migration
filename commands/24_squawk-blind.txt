@@ -1,0 +1,4 @@
+$ python harness/lint_plan.py controls/customer-bigint/naive.json | tail -1; python harness/lint_plan.py controls/customer-bigint/naive-wrapped.json | tail -1
+SQUAWK lock risk: changing-column-type | may break app: none | hygiene: 3
+SQUAWK lock risk: none | may break app: none | hygiene: 0
+[exit 0, 9s]

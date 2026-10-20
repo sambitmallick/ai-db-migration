@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Pre-check (read-only): fail early, before touching anything, if an INVALID index named orders_customer_id_idx exists (e.g. a half-finished earlier CONCURRENTLY build), because IF NOT EXISTS below would silently skip it. On the live database today the index already exists and is valid, so this passes.",
+  "kind": "sql",
+  "start": 1792497186.1894207,
+  "end": 1792497186.5086532,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Build the index without blocking traffic. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so the app's INSERTs and SELECTs keep running throughout. (customer_id, id) serves the customer page's WHERE customer_id = $1 ORDER BY id DESC LIMIT 10 directly from the index. IF NOT EXISTS makes this a no-op when the index is already there (it is, on the live database today). It's a step by itself because CREATE INDEX CONCURRENTLY cannot run inside a transaction block.",
+  "kind": "sql",
+  "start": 1792497186.5086532,
+  "end": 1792497199.001009,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Post-check (read-only): make sure a valid, ready index whose first column is customer_id now exists on orders. Otherwise the plan fails loudly.",
+  "kind": "sql",
+  "start": 1792497199.001009,
+  "end": 1792497199.3288908,
+  "ok": true,
+  "output": ""
+ }
+]

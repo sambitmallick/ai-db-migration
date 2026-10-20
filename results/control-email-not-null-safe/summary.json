@@ -1,0 +1,40 @@
+{
+ "task": "email-not-null",
+ "label": "control-email-not-null-safe",
+ "plan": "controls/email-not-null/safe.json",
+ "steps": 5,
+ "steps_run": 5,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 28.7,
+ "baseline": {
+  "requests": 1254,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 26,
+  "max_ms": 184
+ },
+ "during": {
+  "requests": 1766,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 95,
+  "max_ms": 324
+ },
+ "after": {
+  "requests": 1843,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 662,
+  "max_ms": 926
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "checks_passed": 5,
+ "checks": 5,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=empty"
+}

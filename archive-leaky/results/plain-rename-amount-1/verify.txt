@@ -1,0 +1,8 @@
+PASS  orders.total exists, numeric(10,2), NOT NULL  
+PASS  orders.amount is gone  
+PASS  all 10,000,000 original orders still exist  0 missing
+PASS  original orders: amount, customer and email unchanged  0 changed
+PASS  every order placed during the migration is there, unchanged  0 of 4506 missing or changed
+PASS  app runs with AMOUNT_READ=total  now AMOUNT_READ=total
+PASS  app runs with AMOUNT_WRITE=total  now AMOUNT_WRITE=total
+app: DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=total AMOUNT_WRITE=total GUEST_EMAIL=null

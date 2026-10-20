@@ -1,0 +1,92 @@
+{
+ "run": "live-customer-bigint-1",
+ "task": "customer-bigint",
+ "mode": "live",
+ "prompt": "/migrate customer-bigint plans/live-customer-bigint-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 280,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 27,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-bigint\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; ls plans tasks; bash scripts/db-ro.sh \\\"select version(); \\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select conname, contype, pg_get_constraintdef(oid) from pg_constraint where conrelid in ('orders'::regclass,'customers'::regclass); select indexrelid::regclass, pg_get_"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version(); select column_name, data_type, is_nullable, column_default from information_schema.columns where table_name='orders' order by ordinal_position; select name, setting from pg_settings where name in ('max_wal_size','maintenance_work_mem','lock_time"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}' ; echo; kubectl get pods; bash scripts/db-ro.sh \\\"select application_name, client_addr, state, left(query,80) q from pg_stat_activity where usename='postgres'; select relname, n_tup_ins, n_tup_upd, n_tup_del f"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select application_name, client_addr, state, backend_type, left(query,100) q from pg_stat_activity; select relname, n_tup_ins, n_tup_upd, n_tup_del from pg_stat_user_tables; select id, customer_id, total, status, email from orders order by id desc limit 3;\\\"\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select table_schema, table_name from information_schema.tables where table_schema not in ('pg_catalog','information_schema'); select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('pg_catalog','"
+  },
+  {
+   "tool": "Grep",
+   "input": "{\"pattern\": \"psql\", \"path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\harness\", \"output_mode\": \"content\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"explain (analyze, buffers) SELECT id, total AS amount FROM orders WHERE customer_id = 12345 ORDER BY id DESC LIMIT 10; explain (analyze,buffers) select id from orders where id between 5000000 and 5050000;\\\" ; bash scripts/db-ro.sh \\\"select relpages, reltuples, (s"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"mkdir -p /tmp/plangen && cat > /tmp/plangen/gen.py <<'EOF'\\nimport json, sys\\nsteps = []\\nsteps.append({\\\"note\\\": \\\"Create the trigger function that copies customer_id into the new bigint column on every insert/update.\\\",\\n  \\\"sql\\\": \\\"\\\"\\\"CREATE OR REPLACE FUNCTION public.orders_custom"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-bigint-1.json\", \"content\": \"{\\\"task\\\": \\\"customer-bigint\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Create the trigger function that copies customer_id into the new bigint column on every insert/update. "
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"python -m json.tool plans/live-customer-bigint-1.json > /dev/null && echo valid\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_012nVbbuRz3CWUQtSgg2PQSg",
+   "tool_input": {
+    "command": "kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}' ; echo; kubectl get pods; bash scripts/db-ro.sh \"select application_name, client_addr, state, left(query,80) q from pg_stat_activity where usename='postgres'; select relname, n_tup_ins, n_tup_upd, n_tup_del from pg_stat_user_tables;\""
+   }
+  },
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01RszrCv21JSQoWztES6Tgxr",
+   "tool_input": {
+    "command": "mkdir -p /tmp/plangen && cat > /tmp/plangen/gen.py <<'EOF'\nimport json, sys\nsteps = []\nsteps.append({\"note\": \"Create the trigger function that copies customer_id into the new bigint column on every insert/update.\",\n  \"sql\": \"\"\"CREATE OR REPLACE FUNCTION public.orders_customer_id_sync() RETURNS trigger LANGUAGE plpgsql AS $f$\nBEGIN\n  NEW.customer_id_new := NEW.customer_id;\n  RETURN NEW;\nEND\n$f$;\"\"\"})\nsteps.append({\"note\": \"In one short transaction (lock retried with a 300ms lock_timeout so app queries never queue for long): add nullable bigint column customer_id_new (metadata-only, no rewrite), a NOT VALID check that it is not null (enforced for new rows only), and the sync trigger. From here on every new order fills both columns.\",\n  \"sql\": \"\"\"DO $$\nBEGIN\n  FOR i IN 1..100 LOOP\n    BEGIN\n      PERFORM set_config('lock_timeout', '300ms', true);\n      LOCK TABLE public.orders IN ACCESS EXCLUSIVE MODE;\n      ALTER TABLE public.orders ADD COLUMN customer_id_new bigint;\n      ALTER TABLE public.orders ADD CONSTRAINT orders_customer_id_new_chk CHECK (customer_id_new IS NOT NULL) NOT VALID;\n      CREATE TRIGGER orders_customer_id_sync BEFORE INSERT OR UPDATE ON public.orders\n        FOR EACH ROW EXECUTE FUNCTION public.orders_customer_id_sync();\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.5);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to add customer_id_new';\nEND\n$$;\"\"\"})\nB = 50_000; G = 1_000_000; END = 10_000_000\nfor g in range(0, END, G):\n    stmts = []\n    for lo in range(g, g + G, B):\n        hi = lo + B\n        if lo == 0:\n            cond = f\"id < {hi}\"\n        elif hi >= END:\n            cond = f\"id >= {lo}\"          # open-ended: covers every row inserted before the trigger existed\n        else:\n            cond = f\"id >= {lo} AND id < {hi}\"\n        stmts.append(f\"UPDATE public.orders SET customer_id_new = customer_id WHERE {cond} AND customer_id_new IS NULL;\")\n        stmts.append(\"SELECT pg_sleep(0.1);\")\n    last = \"id >= %d (open-ended, up to the newest row)\" % g if g + G >= END else \"id < %d\" % (g + G)\n    steps.append({\"note\": f\"Backfill customer_id_new from customer_id for ids from {g} to {last}, in 50k-row autocommitted batches with short pauses. Only rows the app never updates are touched; no table lock is taken.\",\n                  \"sql\": \"SET statement_timeout = 0;\\n\" + \"\\n\".join(stmts)})\n    steps.append({\"note\": \"VACUUM so the space of the old row versions is reused by the next batches (keeps the table from doubling in size). Does not block reads or writes.\",\n                  \"sql\": \"VACUUM public.orders;\"})\nsteps.append({\"note\": \"Verify: no row may have customer_id_new different from customer_id. Fails the plan (before anything is swapped) if any does.\",\n  \"sql\": \"\"\"SET statement_timeout = 0;\nDO $$\nBEGIN\n  IF EXISTS (SELECT 1 FROM public.orders WHERE customer_id_new IS DISTINCT FROM customer_id) THEN\n    RAISE EXCEPTION 'customer_id_new does not match customer_id on some rows';\n  END IF;\nEND\n$$;\"\"\"})\nsteps.append({\"note\": \"Validate the not-null check over all rows. Takes only a SHARE UPDATE EXCLUSIVE lock, so reads and writes continue.\",\n  \"sql\": \"SET statement_timeout = 0;\\nALTER TABLE public.orders VALIDATE CONSTRAINT orders_customer_id_new_chk;\"})\nsteps.append({\"note\": \"Collect planner statistics for the new column (they stay with it after the rename), so the /customer query keeps its plan.\",\n  \"sql\": \"SET statement_timeout = 0;\\nANALYZE public.orders;\"})\nsteps.append({\"note\": \"Swap in one short transaction (lock retried with a 300ms lock_timeout): SET NOT NULL on customer_id_new (instant, proven by the validated check), drop the check and the trigger, drop the old integer column (metadata-only), rename customer_id_new to customer_id. The app's SQL is unchanged and sees customer_id as bigint from the next query on.\",\n  \"sql\": \"\"\"DO $$\nBEGIN\n  FOR i IN 1..100 LOOP\n    BEGIN\n      PERFORM set_config('lock_timeout', '300ms', true);\n      LOCK TABLE public.orders IN ACCESS EXCLUSIVE MODE;\n      ALTER TABLE public.orders ALTER COLUMN customer_id_new SET NOT NULL;\n      ALTER TABLE public.orders DROP CONSTRAINT orders_customer_id_new_chk;\n      DROP TRIGGER orders_customer_id_sync ON public.orders;\n      ALTER TABLE public.orders DROP COLUMN customer_id;\n      ALTER TABLE public.orders RENAME COLUMN customer_id_new TO customer_id;\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.5);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to swap customer_id';\nEND\n$$;\"\"\"})\nsteps.append({\"note\": \"Clean up the trigger function and check the result: orders.customer_id is bigint NOT NULL.\",\n  \"sql\": \"\"\"DROP FUNCTION public.orders_customer_id_sync();\nDO $$\nBEGIN\n  IF NOT EXISTS (SELECT 1 FROM information_schema.columns\n                 WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'customer_id'\n                   AND data_type = 'bigint' AND is_nullable = 'NO') THEN\n    RAISE EXCEPTION 'orders.customer_id is not bigint NOT NULL';\n  END IF;\nEND\n$$;\"\"\"})\njson.dump({\"task\": \"customer-bigint\", \"steps\": steps}, open(sys.argv[1], \"w\"), indent=2)\nprint(len(steps))\nEOF\ncd /d/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace && python /tmp/plangen/gen.py plans/live-customer-bigint-1.json && python -c \"import json;d=json.load(open('plans/live-customer-bigint-1.json'));print(d['steps'][2]['sql'][:300]);print(d['steps'][-6]['sql'][-400:])\""
+   }
+  },
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01AZLcsVvUC6ikh8WQ8WPZyz",
+   "tool_input": {
+    "command": "python -m json.tool plans/live-customer-bigint-1.json > /dev/null && echo valid"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-bigint-1.json`. It changes `orders.customer_id` to `bigint` without rewriting the table and without holding any long lock, and it needs no app deploy. I couldn't check that the JSON parses, because the session stopped allowing shell commands after the queries. I checked it by reading it instead.\n\n**What the plan does, in order:**\n1. **Add a new column.** It adds an empty `bigint` column, `customer_id_new`, plus a trigger that copies `customer_id` into it on every insert or update. It also adds a \"not null\" check on the new column that only applies to new rows for now. All of this happens in one short transaction. If the table lock can't be had within 300 ms it backs off and retries, so app queries never wait long behind it.\n2. **Copy the existing rows.** It copies `customer_id` into the new column for all ~10M existing rows, 100k rows per statement, each committing on its own, with short pauses in between. After each million rows it runs `VACUUM` so the table doesn't double in size. The last batch has no upper id limit, so it also catches every order inserted before the trigger existed. None of this blocks reads or writes.\n3. **Check before switching.** The plan stops if any row's new value differs from the old one; at that point the live column hasn't been touched yet. It then validates the \"not null\" check across all rows (reads and writes keep going) and refreshes planner statistics, so the `/customer` query keeps its current fast plan.\n4. **Switch columns.** In one short transaction, with the same lock retry: mark the new column `NOT NULL` (no table scan is needed, because the validated check already proves it), drop the check and the trigger, drop the old `integer` column, and rename the new one to `customer_id`. Each of these only changes table metadata, so the switch takes milliseconds.\n5. **Clean up and confirm.** It drops the trigger function and checks that `customer_id` is now `bigint NOT NULL`.\n\n**Things to know:*"
+}

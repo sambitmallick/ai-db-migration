@@ -1,0 +1,82 @@
+[
+ {
+  "note": "expand: add total",
+  "kind": "sql",
+  "start": 1792490716.8559012,
+  "end": 1792490717.266586,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "app writes both columns",
+  "kind": "deploy",
+  "start": 1792490717.266586,
+  "end": 1792490720.7888758,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "backfill total in batches",
+  "kind": "sql",
+  "start": 1792490720.7888758,
+  "end": 1792490765.639234,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "total: NOT NULL via a validated CHECK",
+  "kind": "sql",
+  "start": 1792490765.639234,
+  "end": 1792490766.0445795,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "validate the check (scans, but doesn't block writes)",
+  "kind": "sql",
+  "start": 1792490766.0445795,
+  "end": 1792490774.292036,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL (instant: the check proves it), drop the check",
+  "kind": "sql",
+  "start": 1792490774.292036,
+  "end": 1792490774.6965196,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "app reads total",
+  "kind": "deploy",
+  "start": 1792490774.6965196,
+  "end": 1792490777.9634602,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "amount may be NULL now (the app is about to stop writing it)",
+  "kind": "sql",
+  "start": 1792490777.9634602,
+  "end": 1792490778.3531146,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "app writes only total",
+  "kind": "deploy",
+  "start": 1792490778.3531146,
+  "end": 1792490783.0857024,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "contract: drop amount",
+  "kind": "sql",
+  "start": 1792490783.0857024,
+  "end": 1792490783.4477284,
+  "ok": true,
+  "output": ""
+ }
+]

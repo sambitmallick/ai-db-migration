@@ -1,0 +1,28 @@
+{
+ "task": "email-not-null",
+ "by": "control (safe)",
+ "steps": [
+  {
+   "note": "app stores '' for guest orders first",
+   "deploy": {
+    "GUEST_EMAIL": "empty"
+   }
+  },
+  {
+   "note": "backfill the old NULLs in batches",
+   "sql": "DO $$ DECLARE lo bigint := 0; hi bigint; BEGIN SELECT max(id) INTO hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET email = '' WHERE id > lo AND id <= lo + 50000 AND email IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$;"
+  },
+  {
+   "note": "email: NOT NULL via a validated CHECK",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ADD CONSTRAINT email_not_null CHECK (email IS NOT NULL) NOT VALID;"
+  },
+  {
+   "note": "validate the check (scans, but doesn't block writes)",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT email_not_null;"
+  },
+  {
+   "note": "SET NOT NULL (instant: the check proves it), drop the check",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ALTER COLUMN email SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT email_not_null;"
+  }
+ ]
+}

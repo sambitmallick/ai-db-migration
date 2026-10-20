@@ -1,0 +1,26 @@
+[
+ {
+  "note": "If an earlier interrupted CREATE INDEX CONCURRENTLY left an INVALID orders_customer_id_idx behind, drop it (IF NOT EXISTS would otherwise skip it). Short lock_timeout so the brief lock can never queue up app traffic.",
+  "kind": "sql",
+  "start": 1792493298.5444744,
+  "end": 1792493298.7994192,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Build the index without blocking the app: CONCURRENTLY only takes SHARE UPDATE EXCLUSIVE, so inserts and reads on orders keep running during the build of the 10M-row index. No statement timeout for the long build.",
+  "kind": "sql",
+  "start": 1792493298.7994192,
+  "end": 1792493305.5622642,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the index exists, is on customer_id and is valid; fail the plan otherwise.",
+  "kind": "sql",
+  "start": 1792493305.5622642,
+  "end": 1792493305.8162954,
+  "ok": true,
+  "output": ""
+ }
+]

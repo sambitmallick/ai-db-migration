@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Remove any leftover (e.g. INVALID, from an interrupted earlier build) index of the same name. CONCURRENTLY so it never blocks the app's reads/writes. No-op today: only orders_pkey exists.",
+  "kind": "sql",
+  "start": 1792508161.2215002,
+  "end": 1792508161.508661,
+  "ok": true,
+  "output": "NOTICE:  index \"orders_customer_id_id_idx\" does not exist, skipping"
+ },
+ {
+  "note": "Build the index online. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so INSERTs and SELECTs keep running during the build. (customer_id, id) serves GET /customer/C's WHERE customer_id = $1 ORDER BY id DESC LIMIT 10 directly with a backward index scan, no sort. Run as a statement on its own: CONCURRENTLY cannot run inside a transaction block.",
+  "kind": "sql",
+  "start": 1792508161.508661,
+  "end": 1792508172.0025067,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the index is valid and ready; fail the plan loudly if not.",
+  "kind": "sql",
+  "start": 1792508172.0025067,
+  "end": 1792508172.3026483,
+  "ok": true,
+  "output": ""
+ }
+]

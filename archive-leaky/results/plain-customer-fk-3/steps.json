@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Add the FK as NOT VALID (skipped if an FK orders.customer_id -> customers.id already exists). Only needs a brief SHARE ROW EXCLUSIVE lock on orders/customers and checks new rows only, no table scan. lock_timeout 300ms so a queued ALTER never stalls app inserts (2 s timeout); on lock timeout it retries up to 30 times, each attempt in its own subtransaction so no lock is kept between tries.",
+  "kind": "sql",
+  "start": 1792496785.8742807,
+  "end": 1792496786.3317304,
+  "ok": true,
+  "output": "NOTICE:  added orders_customer_id_fkey NOT VALID"
+ },
+ {
+  "note": "Validate existing rows. VALIDATE CONSTRAINT takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so reads and inserts keep running during the 10M-row scan. It does nothing if the FK is already validated, and it fails (without deleting anything) if an orphan order exists.",
+  "kind": "sql",
+  "start": 1792496786.3317304,
+  "end": 1792496789.0839849,
+  "ok": true,
+  "output": "NOTICE:  validated orders_customer_id_fkey"
+ },
+ {
+  "note": "Check: fail the plan unless a validated FK orders.customer_id -> customers.id exists.",
+  "kind": "sql",
+  "start": 1792496789.0839849,
+  "end": 1792496789.5128324,
+  "ok": true,
+  "output": ""
+ }
+]

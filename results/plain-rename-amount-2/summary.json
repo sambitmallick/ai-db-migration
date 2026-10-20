@@ -1,0 +1,47 @@
+{
+ "task": "rename-amount",
+ "label": "plain-rename-amount-2",
+ "plan": "plans/plain-rename-amount-2.json",
+ "steps": 9,
+ "steps_run": 9,
+ "completed": true,
+ "empty_plan": false,
+ "failed_step": null,
+ "migration_seconds": 88.5,
+ "baseline": {
+  "requests": 1352,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 15,
+  "max_ms": 86
+ },
+ "during": {
+  "requests": 5461,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 71,
+  "max_ms": 361
+ },
+ "after": {
+  "requests": 1842,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 6,
+  "max_ms": 43
+ },
+ "max_sessions_waiting_on_lock": 1,
+ "longest_lock_wait_s": 0.98,
+ "traffic": {
+  "baseline_rps": 61.4,
+  "during_rps": 61.7,
+  "after_rps": 61.4
+ },
+ "traffic_ok": true,
+ "checks_passed": 7,
+ "checks": 7,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=total AMOUNT_WRITE=total GUEST_EMAIL=null"
+}

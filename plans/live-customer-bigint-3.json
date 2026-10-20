@@ -1,0 +1,62 @@
+{"task": "customer-bigint", "steps": [
+  {"note": "Trigger function that copies customer_id into the new bigint column on every insert/update. Touches no table.",
+   "sql": "CREATE OR REPLACE FUNCTION orders_customer_id_sync() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.customer_id_new := NEW.customer_id; RETURN NEW; END $f$;"},
+
+  {"note": "In ONE transaction: add nullable column customer_id_new bigint (metadata only, no rewrite), NOT VALID checks (not null, equal to customer_id) that already apply to new rows, and the sync trigger. lock_timeout 200ms + retry, so app queries never queue behind us for more than 200ms. If the lock is never obtained the step fails with nothing changed.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOOP BEGIN ALTER TABLE orders ADD COLUMN customer_id_new bigint, ADD CONSTRAINT orders_customer_id_new_nn CHECK (customer_id_new IS NOT NULL) NOT VALID, ADD CONSTRAINT orders_customer_id_new_eq CHECK (customer_id_new = customer_id) NOT VALID; CREATE TRIGGER orders_customer_id_sync BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_customer_id_sync(); EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.2 + random() * 0.5); END; END LOOP; END $$;"},
+
+  {"note": "Backfill ids [1, 1000001) in 5000-row batches, one commit per batch, short pause between batches. Row locks only on old rows the app never updates.",
+   "sql": "DO $$ DECLARE b bigint := 1; hi bigint := 1000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum so the next batches reuse the space of the dead row versions (limits table bloat). No truncation, so no exclusive lock.",
+   "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [1000001, 2000001).",
+   "sql": "DO $$ DECLARE b bigint := 1000001; hi bigint := 2000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [2000001, 3000001).",
+   "sql": "DO $$ DECLARE b bigint := 2000001; hi bigint := 3000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [3000001, 4000001).",
+   "sql": "DO $$ DECLARE b bigint := 3000001; hi bigint := 4000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [4000001, 5000001).",
+   "sql": "DO $$ DECLARE b bigint := 4000001; hi bigint := 5000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [5000001, 6000001).",
+   "sql": "DO $$ DECLARE b bigint := 5000001; hi bigint := 6000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [6000001, 7000001).",
+   "sql": "DO $$ DECLARE b bigint := 6000001; hi bigint := 7000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [7000001, 8000001).",
+   "sql": "DO $$ DECLARE b bigint := 7000001; hi bigint := 8000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids [8000001, 9000001).",
+   "sql": "DO $$ DECLARE b bigint := 8000001; hi bigint := 9000001; BEGIN WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM (TRUNCATE false) orders;"},
+
+  {"note": "Backfill ids from 9000001 up to the current max(id). Orders inserted since the trigger was created already have the value and are skipped.",
+   "sql": "DO $$ DECLARE b bigint := 9000001; hi bigint; BEGIN SELECT greatest(coalesce(max(id), 0) + 1, 10000001) INTO hi FROM orders; WHILE b < hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= b AND id < least(b + 5000, hi) AND customer_id_new IS NULL; COMMIT; b := b + 5000; PERFORM pg_sleep(0.01); END LOOP; END $$;"},
+  {"note": "Vacuum and analyze, so the new column has planner statistics before it becomes customer_id.",
+   "sql": "VACUUM (ANALYZE, TRUNCATE false) orders;"},
+
+  {"note": "Validate 'customer_id_new IS NOT NULL'. Scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts. Fails (plan stops, app unaffected) if any row was missed.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_nn;"},
+  {"note": "Validate 'customer_id_new = customer_id' on every row: proves every value was copied unchanged. Same non-blocking lock.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_eq;"},
+
+  {"note": "Swap, in ONE short transaction under ACCESS EXCLUSIVE (lock_timeout 200ms + retry): drop the trigger and the equality check, SET NOT NULL (no table scan, because the validated check already proves there are no NULLs), drop the now-redundant check, drop the old integer column, rename customer_id_new to customer_id. All metadata only, so the lock is held for milliseconds. Queued app queries then see customer_id as bigint NOT NULL; the app's SQL is unchanged, so no deploy is needed.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; DROP TRIGGER orders_customer_id_sync ON orders; ALTER TABLE orders DROP CONSTRAINT orders_customer_id_new_eq; ALTER TABLE orders ALTER COLUMN customer_id_new SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_customer_id_new_nn; ALTER TABLE orders DROP COLUMN customer_id; ALTER TABLE orders RENAME COLUMN customer_id_new TO customer_id; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.2 + random() * 0.5); END; END LOOP; END $$;"},
+
+  {"note": "Remove the trigger function (no longer used).",
+   "sql": "DROP FUNCTION orders_customer_id_sync();"},
+  {"note": "Check the result: orders.customer_id is bigint NOT NULL and has no NULLs.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_attribute WHERE attrelid = 'orders'::regclass AND attname = 'customer_id' AND NOT attisdropped AND atttypid = 'bigint'::regtype AND attnotnull) THEN RAISE EXCEPTION 'orders.customer_id is not bigint NOT NULL'; END IF; END $$;"}
+]}

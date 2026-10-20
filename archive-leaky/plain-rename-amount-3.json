@@ -1,0 +1,14 @@
+{"task": "rename-amount", "steps": [
+  {"note": "Metadata-only, one transaction: rename table orders -> orders_base and its column amount -> total (keeps type, NOT NULL, data, pkey, sequence), then put an auto-updatable view named orders in its place that exposes the column both as amount and as total, so old and new app versions both work. View defaults for id/created_at mirror the table's. Lock is taken with a 100 ms lock_timeout and retried, so app queries never queue long behind the ACCESS EXCLUSIVE lock (e.g. behind a slow /customer seq scan).",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '100ms', true); FOR i IN 1..600 LOOP BEGIN ALTER TABLE orders RENAME TO orders_base; ALTER TABLE orders_base RENAME COLUMN amount TO total; CREATE VIEW orders AS SELECT id, customer_id, total AS amount, total, status, email, created_at FROM orders_base; ALTER VIEW orders ALTER COLUMN id SET DEFAULT nextval('orders_id_seq'::regclass); ALTER VIEW orders ALTER COLUMN created_at SET DEFAULT now(); RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.2); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+  {"note": "Check the bridge works: view is insertable via both column names (inside a rolled-back transaction, nothing persists).",
+   "sql": "BEGIN; INSERT INTO orders (customer_id, amount, status, email) VALUES (1, 1.00, 'new', NULL) RETURNING id, created_at; INSERT INTO orders (customer_id, total, status, email) VALUES (1, 1.00, 'new', NULL) RETURNING id, created_at; ROLLBACK;"},
+  {"note": "Roll the app over to read and write total (works against the view while old pods still use amount).",
+   "deploy": {"AMOUNT_READ": "total", "AMOUNT_WRITE": "total"}},
+  {"note": "Let terminating old pods finish their 3 s drain and any in-flight (max 2 s) queries that still use amount.",
+   "wait": 15},
+  {"note": "Metadata-only, one transaction: drop the bridge view and rename orders_base back to orders. Now orders has total, no amount, and every pod uses total. Same short lock_timeout + retry.",
+   "sql": "DO $$ BEGIN PERFORM set_config('lock_timeout', '100ms', true); FOR i IN 1..600 LOOP BEGIN DROP VIEW orders; ALTER TABLE orders_base RENAME TO orders; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.2); END; END LOOP; RAISE EXCEPTION 'could not lock orders'; END $$;"},
+  {"note": "Verify the end state: orders.total is numeric(10,2) NOT NULL and amount is gone.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='orders' AND column_name='total' AND is_nullable='NO' AND data_type='numeric' AND numeric_precision=10 AND numeric_scale=2) OR EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='orders' AND column_name='amount') THEN RAISE EXCEPTION 'orders is not in the expected final shape'; END IF; END $$;"}
+]}

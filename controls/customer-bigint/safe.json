@@ -1,0 +1,34 @@
+{
+ "task": "customer-bigint",
+ "by": "control (safe)",
+ "steps": [
+  {
+   "note": "new bigint column",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ADD COLUMN customer_id_new bigint;"
+  },
+  {
+   "note": "trigger keeps it in sync for new and updated rows",
+   "sql": "CREATE FUNCTION orders_sync_customer() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.customer_id_new := NEW.customer_id; RETURN NEW; END $$;SET lock_timeout = '3s'; CREATE TRIGGER orders_sync_customer BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_sync_customer();"
+  },
+  {
+   "note": "backfill in batches",
+   "sql": "DO $$ DECLARE lo bigint := 0; hi bigint; BEGIN SELECT max(id) INTO hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET customer_id_new = customer_id WHERE id > lo AND id <= lo + 50000 AND customer_id_new IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$;"
+  },
+  {
+   "note": "customer_id_new: NOT NULL via a validated CHECK",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ADD CONSTRAINT customer_id_new_not_null CHECK (customer_id_new IS NOT NULL) NOT VALID;"
+  },
+  {
+   "note": "validate the check (scans, but doesn't block writes)",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT customer_id_new_not_null;"
+  },
+  {
+   "note": "SET NOT NULL (instant: the check proves it), drop the check",
+   "sql": "SET lock_timeout = '3s'; ALTER TABLE orders ALTER COLUMN customer_id_new SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT customer_id_new_not_null;"
+  },
+  {
+   "note": "swap the columns in one short transaction",
+   "sql": "SET lock_timeout = '3s'; BEGIN; ALTER TABLE orders DROP COLUMN customer_id; ALTER TABLE orders RENAME COLUMN customer_id_new TO customer_id; DROP TRIGGER orders_sync_customer ON orders; COMMIT; DROP FUNCTION orders_sync_customer();"
+  }
+ ]
+}

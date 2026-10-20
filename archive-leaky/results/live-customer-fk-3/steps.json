@@ -1,0 +1,34 @@
+[
+ {
+  "note": "Safety check before changing anything: abort the plan if any order already points at a missing customer. Read-only; nothing is deleted or rewritten.",
+  "kind": "sql",
+  "start": 1792501317.9334538,
+  "end": 1792501320.1393557,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add the foreign key as NOT VALID (enforced for new and updated rows at once, no scan of the 10M existing rows). It needs a SHARE ROW EXCLUSIVE lock on orders for an instant, which briefly blocks INSERTs (reads are not blocked). lock_timeout 300ms keeps any queued INSERT far below the app's 2s statement timeout; on timeout it backs off and retries. Skipped if an orders->customers foreign key already exists.",
+  "kind": "sql",
+  "start": 1792501320.1393557,
+  "end": 1792501320.4304473,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing rows in its own transaction. VALIDATE CONSTRAINT only takes SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so reads and inserts keep running during the full-table check. Parallel workers are turned off for this session to limit the CPU/IO hit on live traffic. Fails (changing nothing) if a violating row were found.",
+  "kind": "sql",
+  "start": 1792501320.4304473,
+  "end": 1792501321.9798343,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Confirm the foreign key exists and is validated; fail the plan otherwise.",
+  "kind": "sql",
+  "start": 1792501321.9798343,
+  "end": 1792501322.2242997,
+  "ok": true,
+  "output": ""
+ }
+]

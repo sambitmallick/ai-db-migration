@@ -1,0 +1,40 @@
+{
+ "task": "add-index",
+ "label": "control-add-index-safe",
+ "plan": "controls/add-index/safe.json",
+ "steps": 1,
+ "steps_run": 1,
+ "completed": true,
+ "failed_step": null,
+ "migration_seconds": 7.3,
+ "baseline": {
+  "requests": 1264,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 110,
+  "max_ms": 161
+ },
+ "during": {
+  "requests": 454,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 106,
+  "max_ms": 137
+ },
+ "after": {
+  "requests": 1844,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 11,
+  "max_ms": 288
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "checks_passed": 5,
+ "checks": 5,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

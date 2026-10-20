@@ -1,0 +1,25 @@
+# Postgres 17: one pod.
+apiVersion: v1
+kind: Service
+metadata: { name: postgres }
+spec: { selector: { app: postgres }, ports: [{ port: 5432 }] }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: postgres }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:17-alpine
+          imagePullPolicy: Never
+          env: [{ name: POSTGRES_PASSWORD, value: shop }, { name: POSTGRES_DB, value: shop }]
+          args: ["-c", "shared_buffers=256MB", "-c", "max_connections=100", "-c", "log_lock_waits=on"]
+          readinessProbe: { exec: { command: ["pg_isready", "-U", "postgres"] }, periodSeconds: 2 }
+          resources: { requests: { cpu: 500m, memory: 512Mi }, limits: { memory: 1536Mi } }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+      volumes: [{ name: data, emptyDir: {} }]

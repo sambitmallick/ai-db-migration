@@ -1,0 +1,19 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Make the app store '' instead of NULL for new guest orders, so nothing new adds NULLs.",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+
+  {"note": "Let the terminating old pods finish any in-flight (NULL-email) inserts.",
+   "wait": 10},
+
+  {"note": "Backfill the 2.5M existing NULL emails with '' in id-range batches of 50k, committing each batch (short transactions, no long row locks, readable progress). The app never updates existing rows, so nothing contends. A final sweep catches any stragglers.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE lo bigint := 0; hi bigint; BEGIN LOOP SELECT max(id) INTO hi FROM orders; EXIT WHEN lo > hi; UPDATE orders SET email = '' WHERE id >= lo AND id < lo + 50000 AND email IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$; UPDATE orders SET email = '' WHERE email IS NULL;"},
+
+  {"note": "Add CHECK (email IS NOT NULL) NOT VALID: catalog-only, needs ACCESS EXCLUSIVE only for an instant. lock_timeout 1s with retries so we never queue in front of app queries for long.",
+   "sql": "SET lock_timeout = '1s'; DO $$ BEGIN FOR i IN 1..60 LOOP BEGIN ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to add constraint'; END $$;"},
+
+  {"note": "Validate the constraint: full scan of 10M rows under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts.",
+   "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL: Postgres 17 uses the validated CHECK to skip the table scan, so the ACCESS EXCLUSIVE lock is momentary. Then drop the now-redundant CHECK. Both retried with a 1s lock_timeout.",
+   "sql": "SET lock_timeout = '1s'; DO $$ BEGIN FOR i IN 1..60 LOOP BEGIN ALTER TABLE orders ALTER COLUMN email SET NOT NULL; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to set NOT NULL'; END $$; DO $$ BEGIN FOR i IN 1..60 LOOP BEGIN ALTER TABLE orders DROP CONSTRAINT orders_email_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to drop constraint'; END $$;"}
+]}

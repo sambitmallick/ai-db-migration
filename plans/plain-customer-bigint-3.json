@@ -1,0 +1,39 @@
+{"task": "customer-bigint", "steps": [
+  {"note": "Trigger function that keeps the new bigint column equal to customer_id on every insert/update. Touches no table lock.",
+   "sql": "CREATE OR REPLACE FUNCTION orders_customer_id_sync() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.customer_id_new := NEW.customer_id; RETURN NEW; END $f$;"},
+
+  {"note": "Add nullable customer_id_new bigint (metadata-only), a NOT VALID 'IS NOT NULL' check (enforced for new rows only) and the sync trigger, all in one short transaction. Locks are taken with a 200 ms lock_timeout and retried, so app queries never queue behind us for longer than that.",
+   "sql": "DO $$ DECLARE tries int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ADD COLUMN customer_id_new bigint; ALTER TABLE orders ADD CONSTRAINT orders_customer_id_new_not_null CHECK (customer_id_new IS NOT NULL) NOT VALID; CREATE TRIGGER orders_customer_id_sync BEFORE INSERT OR UPDATE ON orders FOR EACH ROW EXECUTE FUNCTION orders_customer_id_sync(); EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 200 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$;"},
+
+  {"note": "Backfill ids [0, 2.5M) in 50k-row batches, one commit per batch (rows are never touched by the app, so no contention).",
+   "sql": "DO $$ DECLARE lo bigint := 0; BEGIN WHILE lo < 2500000 LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= lo AND id < lo + 50000 AND customer_id_new IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$;"},
+  {"note": "Vacuum so the dead row versions' space is reused by the next batches instead of growing the table.",
+   "sql": "VACUUM orders;"},
+
+  {"note": "Backfill ids [2.5M, 5M).",
+   "sql": "DO $$ DECLARE lo bigint := 2500000; BEGIN WHILE lo < 5000000 LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= lo AND id < lo + 50000 AND customer_id_new IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM orders;"},
+
+  {"note": "Backfill ids [5M, 7.5M).",
+   "sql": "DO $$ DECLARE lo bigint := 5000000; BEGIN WHILE lo < 7500000 LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= lo AND id < lo + 50000 AND customer_id_new IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$;"},
+  {"note": "Vacuum.", "sql": "VACUUM orders;"},
+
+  {"note": "Backfill ids from 7.5M to the current max id. Rows inserted since the trigger exists are already filled; the IS NULL filter skips them.",
+   "sql": "DO $$ DECLARE lo bigint := 7500000; maxid bigint; BEGIN SELECT max(id) INTO maxid FROM orders; WHILE lo <= maxid LOOP UPDATE orders SET customer_id_new = customer_id WHERE id >= lo AND id < lo + 50000 AND customer_id_new IS NULL; COMMIT; lo := lo + 50000; END LOOP; END $$;"},
+  {"note": "Vacuum and refresh statistics.", "sql": "VACUUM ANALYZE orders;"},
+
+  {"note": "Safety check: stop the plan here if any row is unfilled or differs from customer_id.",
+   "sql": "DO $$ DECLARE bad bigint; BEGIN SELECT count(*) INTO bad FROM orders WHERE customer_id_new IS DISTINCT FROM customer_id; IF bad > 0 THEN RAISE EXCEPTION '% rows not backfilled correctly', bad; END IF; END $$;"},
+
+  {"note": "Validate the NOT NULL check. Takes only SHARE UPDATE EXCLUSIVE: app reads and inserts keep running during the scan.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_not_null;"},
+
+  {"note": "The swap, in one short transaction under a 200 ms lock_timeout with retries: SET NOT NULL (no scan: proven by the validated check), drop the check, trigger and old integer column, rename customer_id_new to customer_id. Everything is metadata-only, so the exclusive lock is held for milliseconds. The app keeps using the column name customer_id, so no redeploy is needed.",
+   "sql": "DO $$ DECLARE tries int := 0; BEGIN PERFORM set_config('lock_timeout', '200ms', true); LOOP BEGIN LOCK TABLE orders IN ACCESS EXCLUSIVE MODE; ALTER TABLE orders ALTER COLUMN customer_id_new SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_customer_id_new_not_null; DROP TRIGGER orders_customer_id_sync ON orders; ALTER TABLE orders DROP COLUMN customer_id; ALTER TABLE orders RENAME COLUMN customer_id_new TO customer_id; EXIT; EXCEPTION WHEN lock_not_available THEN tries := tries + 1; IF tries >= 200 THEN RAISE; END IF; PERFORM pg_sleep(0.3); END; END LOOP; END $$;"},
+
+  {"note": "Drop the now-unused trigger function and refresh statistics for the renamed column.",
+   "sql": "DROP FUNCTION orders_customer_id_sync(); ANALYZE orders;"},
+
+  {"note": "Final check: customer_id is bigint NOT NULL; fail the plan otherwise.",
+   "sql": "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'customer_id' AND data_type = 'bigint' AND is_nullable = 'NO') THEN RAISE EXCEPTION 'orders.customer_id is not bigint NOT NULL'; END IF; END $$;"}
+]}

@@ -1,0 +1,74 @@
+[
+ {
+  "note": "Expand: create the trigger function that keeps amount and total in sync (whichever one a writer leaves NULL is copied from the other).",
+  "kind": "sql",
+  "start": 1792503676.4855342,
+  "end": 1792503676.7407634,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Expand: add nullable total (metadata-only) and the sync trigger in one transaction. Short lock_timeout with retries so we never queue app queries behind a waiting ACCESS EXCLUSIVE lock.",
+  "kind": "sql",
+  "start": 1792503676.7407634,
+  "end": 1792503676.995545,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill total from amount in 20k-row id batches, committing each batch (short row locks, no long transaction). Rows above the max id seen here were inserted after the trigger existed, so already have total.",
+  "kind": "sql",
+  "start": 1792503676.995545,
+  "end": 1792503737.4895403,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Prepare NOT NULL on total: add a NOT VALID check constraint (brief lock, no scan), with lock retries.",
+  "kind": "sql",
+  "start": 1792503737.4895403,
+  "end": 1792503737.74727,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the check constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or writes. Fails (and stops the plan) if any row still has a NULL total.",
+  "kind": "sql",
+  "start": 1792503737.74727,
+  "end": 1792503745.2693417,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Make total NOT NULL. Postgres uses the validated check constraint to skip the table scan, so the lock is brief; then drop the now-redundant check.",
+  "kind": "sql",
+  "start": 1792503745.2693417,
+  "end": 1792503745.5399141,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Switch the app to total. During the rolling update old pods write amount and new pods write total; the trigger fills the other column, so both versions keep working.",
+  "kind": "deploy",
+  "start": 1792503745.5399141,
+  "end": 1792503748.366791,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Give terminating old pods time to drain and exit (they close connections after ~3 s; grace period is 30 s).",
+  "kind": "wait",
+  "start": 1792503748.366791,
+  "end": 1792503783.3712564,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Contract: first wait until no client session's last query still uses amount (old app version), failing safely if one remains; then drop the trigger and the amount column in one transaction with lock retries, and drop the function.",
+  "kind": "sql",
+  "start": 1792503783.3712564,
+  "end": 1792503843.4269667,
+  "ok": true,
+  "output": ""
+ }
+]

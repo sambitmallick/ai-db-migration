@@ -1,0 +1,130 @@
+[
+ {
+  "note": "Trigger function that copies customer_id into the new bigint column on every insert / update of customer_id. Touches no table, takes no lock on orders.",
+  "kind": "sql",
+  "start": 1792504892.9699545,
+  "end": 1792504893.223264,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In one short transaction: add the nullable bigint column (metadata only, no rewrite), an unvalidated NOT NULL check, and the sync trigger. From the commit on, every new row has customer_id_new set. The brief ACCESS EXCLUSIVE lock is taken with a 500ms lock_timeout and retried, so app queries never queue behind it for long.",
+  "kind": "sql",
+  "start": 1792504893.223264,
+  "end": 1792504893.4710343,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids up to 2,000,000 in batches of 10,000 rows, committing after each batch (row locks only; the app only inserts, so nothing contends).",
+  "kind": "sql",
+  "start": 1792504893.4710343,
+  "end": 1792504902.491657,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum so the dead row versions from this chunk are reused by the next one (keeps bloat bounded). Non-blocking for the app.",
+  "kind": "sql",
+  "start": 1792504902.491657,
+  "end": 1792504904.286644,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,000,001 - 4,000,000.",
+  "kind": "sql",
+  "start": 1792504904.286644,
+  "end": 1792504913.6105943,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792504913.6105943,
+  "end": 1792504915.3441198,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4,000,001 - 6,000,000.",
+  "kind": "sql",
+  "start": 1792504915.3441198,
+  "end": 1792504926.4126678,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792504926.4126678,
+  "end": 1792504928.3876677,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6,000,001 - 8,000,000.",
+  "kind": "sql",
+  "start": 1792504928.3876677,
+  "end": 1792504938.6425173,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792504938.6425173,
+  "end": 1792504940.4372382,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill everything above 8,000,000 up to the current max id (rows inserted after the trigger was created already have the value).",
+  "kind": "sql",
+  "start": 1792504940.4372382,
+  "end": 1792504950.3763783,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum and refresh statistics.",
+  "kind": "sql",
+  "start": 1792504950.3763783,
+  "end": 1792504952.9733546,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the NOT NULL check (SHARE UPDATE EXCLUSIVE: app reads and inserts keep running), then verify every row has customer_id_new equal to customer_id. Fails the plan, before any destructive change, if a single row differs.",
+  "kind": "sql",
+  "start": 1792504952.9733546,
+  "end": 1792504955.2187746,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "The swap, in one short transaction with lock_timeout + retry: SET NOT NULL (no table scan: proven by the validated check), drop the trigger, drop the old integer column (metadata only), rename the bigint column to customer_id, drop the helper check. The app's SQL names columns explicitly, so it works unchanged before and after; no redeploy needed.",
+  "kind": "sql",
+  "start": 1792504955.2187746,
+  "end": 1792504955.4887602,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the trigger function and check the result: orders.customer_id is bigint NOT NULL.",
+  "kind": "sql",
+  "start": 1792504955.4887602,
+  "end": 1792504955.7630992,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Statistics for the new customer_id column (used by the /customer query planner).",
+  "kind": "sql",
+  "start": 1792504955.7630992,
+  "end": 1792504956.1890206,
+  "ok": true,
+  "output": ""
+ }
+]

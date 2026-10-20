@@ -1,0 +1,10 @@
+{
+ "task": "customer-fk",
+ "by": "control (naive)",
+ "steps": [
+  {
+   "note": "ADD FOREIGN KEY (validates every row while blocking writes)",
+   "sql": "ALTER TABLE orders ADD CONSTRAINT orders_customer_fk FOREIGN KEY (customer_id) REFERENCES customers (id);"
+  }
+ ]
+}

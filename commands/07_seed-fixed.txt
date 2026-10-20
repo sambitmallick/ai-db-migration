@@ -1,0 +1,7 @@
+$ bash scripts/seed.sh
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to table customers
+drop cascades to table orders
+NOTICE:  schema "audit" does not exist, skipping
+orders: 4000000, guest orders (email NULL): 1000000, table size: 386 MB
+[exit 0, 14s]

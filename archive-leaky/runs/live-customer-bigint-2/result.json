@@ -1,0 +1,63 @@
+{
+ "run": "live-customer-bigint-2",
+ "task": "customer-bigint",
+ "mode": "live",
+ "prompt": "/migrate customer-bigint plans/live-customer-bigint-2.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 210,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 28,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-bigint\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; ls plans tasks results results-controls-v1 harness experiment controls 2>&1 | head -80\", \"description\": \"Inspect helper script and directories\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select version();\\\" && bash scripts/db-ro.sh \\\"\\\\d+ orders\\\" && bash scripts/db-ro.sh \\\"\\\\d customers\\\" && bash scripts/db-ro.sh \\\"select schemaname, relname, n_live_tup, pg_size_pretty("
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"\\\\d audit.*\\\" ; bash scripts/db-ro.sh \\\"select count(*), min(customer_id), max(customer_id) from orders;\\\" ; bash scripts/db-ro.sh \\\"select name, setting from pg_settings where name in ("
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"select setrole::regrole, setdatabase, setconfig from pg_db_role_setting;\\\"; bash scripts/db-ro.sh \\\"select name, setting, source from pg_settings where name in ('statement_timeout','idle"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e '\\nconst steps = [];\\nconst lockLoop = (body) => `DO $$ DECLARE tries int := 0; BEGIN\\n  PERFORM set_config(\\\\x27lock_timeout\\\\x27, \\\\x27300ms\\\\x27, true);\\n  LOOP\\n    BEGIN\\n      LOCK TABLE orders IN"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-bigint-2.json\", \"content\": \"{\\\"task\\\": \\\"customer-bigint\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Create the trigger function that copies customer_id into the new bigint column. Takes no lock on orders"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01SgCVUp1EXX6SdLQoLwaroo",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e '\nconst steps = [];\nconst lockLoop = (body) => `DO $$ DECLARE tries int := 0; BEGIN\n  PERFORM set_config(\\x27lock_timeout\\x27, \\x27300ms\\x27, true);\n  LOOP\n    BEGIN\n      LOCK TABLE orders IN ACCESS EXCLUSIVE MODE;\n      EXIT;\n    EXCEPTION WHEN lock_not_available THEN\n      tries := tries + 1;\n      IF tries >= 200 THEN RAISE; END IF;\n      PERFORM pg_sleep(0.2 + random() * 0.5);\n    END;\n  END LOOP;\n${body}\nEND $$;`;\nsteps.push({note: \"Create the trigger function that copies customer_id into the new bigint column on every insert/update of customer_id. No lock on orders.\",\n  sql: \"CREATE OR REPLACE FUNCTION orders_customer_id_sync() RETURNS trigger LANGUAGE plpgsql AS $f$ BEGIN NEW.customer_id_new := NEW.customer_id; RETURN NEW; END $f$;\"});\nsteps.push({note: \"In one short transaction (lock taken with a 300 ms lock_timeout, retried): add nullable customer_id_new bigint (metadata only, no rewrite), the sync trigger, and NOT VALID checks that it is non-null and equal to customer_id. From now on every new row is written to both columns.\",\n  sql: lockLoop(`  ALTER TABLE orders ADD COLUMN customer_id_new bigint;\n  CREATE TRIGGER orders_customer_id_sync BEFORE INSERT OR UPDATE OF customer_id ON orders\n    FOR EACH ROW EXECUTE FUNCTION orders_customer_id_sync();\n  ALTER TABLE orders\n    ADD CONSTRAINT orders_customer_id_new_nn CHECK (customer_id_new IS NOT NULL) NOT VALID,\n    ADD CONSTRAINT orders_customer_id_new_eq CHECK (customer_id_new = customer_id) NOT VALID;`)});\nconst BATCH = 50000, CHUNK = 1000000, MAXID = 10000000;\nfor (let c = 0; c < MAXID; c += CHUNK) {\n  const stmts = [];\n  for (let s = c; s < c + CHUNK; s += BATCH)\n    stmts.push(`UPDATE orders SET customer_id_new = customer_id WHERE id > ${s} AND id <= ${s + BATCH} AND customer_id_new IS NULL;`);\n  steps.push({note: `Backfill ids ${c + 1}..${c + CHUNK} in ${CHUNK / BATCH} batches of ${BATCH} rows, each its own short transaction (row locks only on old rows the app never updates).`, sql: stmts.join(\" \")});\n  steps.push({note: \"Vacuum so the dead row versions from this chunk are reused and the table does not double in size. Does not block reads or writes.\", sql: \"VACUUM orders;\"});\n}\nsteps.push({note: \"Backfill any rows above id 10,000,000 that were inserted before the trigger existed.\",\n  sql: `UPDATE orders SET customer_id_new = customer_id WHERE id > ${MAXID} AND customer_id_new IS NULL;`});\nsteps.push({note: \"Validate both checks (SHARE UPDATE EXCLUSIVE: app reads and writes keep running). Fails, and stops the plan before any destructive step, if any row is NULL or differs from customer_id.\",\n  sql: \"ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_nn; ALTER TABLE orders VALIDATE CONSTRAINT orders_customer_id_new_eq;\"});\nsteps.push({note: \"Refresh planner statistics so the new column keeps the same estimates for the /customer query.\", sql: \"VACUUM ANALYZE orders;\"});\nsteps.push({note: \"Swap in one short transaction (lock with 300 ms lock_timeout, retried): SET NOT NULL (no table scan, proven by the validated check), drop trigger and checks, drop the old integer column, rename customer_id_new to customer_id. Catalog-only, milliseconds.\",\n  sql: lockLoop(`  ALTER TABLE orders ALTER COLUMN customer_id_new SET NOT NULL;\n  DROP TRIGGER orders_customer_id_sync ON orders;\n  ALTER TABLE orders DROP CONSTRAINT orders_customer_id_new_nn, DROP CONSTRAINT orders_customer_id_new_eq;\n  ALTER TABLE orders DROP COLUMN customer_id;\n  ALTER TABLE orders RENAME COLUMN customer_id_new TO customer_id;`)});\nsteps.push({note: \"Drop the now-unused trigger function.\", sql: \"DROP FUNCTION orders_customer_id_sync();\"});\nsteps.push({note: \"Verify: orders.customer_id is bigint NOT NULL and has no NULLs.\",\n  sql: `DO $$ BEGIN\n  IF (SELECT format_type(atttypid, atttypmod) || \\x27/\\x27 || attnotnull FROM pg_attribute\n      WHERE attrelid = \\x27orders\\x27::regclass AND attname = \\x27customer_id\\x27 AND NOT attisdropped) IS DISTINCT FROM \\x27bigint/true\\x27\n  THEN RAISE EXCEPTION \\x27orders.customer_id is not bigint NOT NULL\\x27; END IF;\nEND $$;`});\nrequire(\"fs\").writeFileSync(\"plans/live-customer-bigint-2.json\", JSON.stringify({task: \"customer-bigint\", steps}, null, 2) + \"\\n\");\nconsole.log(steps.length);\n' && node -e 'const p=require(\"./plans/live-customer-bigint-2.json\"); console.log(p.steps[1].sql); console.log(p.steps[2].sql.slice(0,300)); console.log(p.steps.at(-3).sql)'",
+    "description": "Generate the migration plan JSON"
+   }
+  }
+ ],
+ "answer": "I've written the plan to `plans/live-customer-bigint-2.json`. I haven't run it or checked that the JSON parses, because shell commands were blocked when I tried to write the file. The SQL is checked only by reading it through.\n\nThe plan never rewrites or locks `orders` for longer than a few milliseconds:\n\n1. **Add a new column.** In one short transaction it adds a nullable `customer_id_new bigint`, which doesn't rewrite the table. It also adds a trigger that copies `customer_id` into it on every insert, plus two checks that aren't enforced on old rows yet: the new column must be non-null and must equal `customer_id`. From then on, every new order fills both columns. The app needs no redeploy.\n2. **Copy the existing rows.** It fills in the old 10 million rows in batches of 50,000 by id, committing after each batch. The app only inserts and reads, so it never waits on these updates. A `VACUUM` after each million rows lets the table reuse space instead of doubling in size. A final pass catches rows above id 10,000,000 that were added before the trigger existed.\n3. **Prove the data matches.** Both checks are then validated against every row while the app keeps reading and writing. If any row is NULL or differs from `customer_id`, the plan stops here, before anything is dropped.\n4. **Swap the columns.** In one transaction taking a few milliseconds, it sets the new column NOT NULL (the validated check means this needs no table scan), removes the trigger and checks, drops the old integer column and renames `customer_id_new` to `customer_id`. A final step confirms the column is bigint NOT NULL.\n\nBoth steps that take a table lock give up waiting after 300 ms and retry. App queries queued behind them wait at most about 300 ms, well within the app's 2 s query timeout.\n\nThings you should know:\n- **The API response changes.** The Postgres driver the app uses returns bigint values as strings, so `GET /order/ID` will return `\"customer_id\": \"123\"` instead of `123`. Changing the typ"
+}

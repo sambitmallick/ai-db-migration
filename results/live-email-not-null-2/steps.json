@@ -1,0 +1,66 @@
+[
+ {
+  "note": "Make the app write '' instead of NULL for guest orders. The deploy waits for the rolling update; old pods keep their old setting until they are replaced.",
+  "kind": "deploy",
+  "start": 1792511505.949099,
+  "end": 1792511511.1026313,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let the old pods finish their in-flight requests and exit (3 s drain + 2 s statement timeout), so nothing writes NULL emails any more.",
+  "kind": "wait",
+  "start": 1792511511.1026313,
+  "end": 1792511526.1081393,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill: set email = '' on guest orders (email IS NULL) in small id-range batches, committing each one. This only touches old rows the app never updates, so it takes no lock the app waits on. The upper bound is read again on every loop, so rows inserted during the backfill are covered too. Rows with an email, and the 28 rows that already have '', are not touched.",
+  "kind": "sql",
+  "start": 1792511526.1081393,
+  "end": 1792511565.183162,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) as NOT VALID: it is enforced for new writes but existing rows are not scanned. It needs a brief ACCESS EXCLUSIVE lock, so try with a 200 ms lock_timeout and retry, so app queries never queue behind it for long.",
+  "kind": "sql",
+  "start": 1792511565.183162,
+  "end": 1792511565.6540415,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Last sweep: catch any NULL written between the backfill and the constraint (normally none). From here on no NULL can be written.",
+  "kind": "sql",
+  "start": 1792511565.6540415,
+  "end": 1792511573.0321553,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint. This scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts. If any NULL were left it fails here and the plan stops before the column is changed.",
+  "kind": "sql",
+  "start": 1792511573.0321553,
+  "end": 1792511575.3428946,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL. Because a valid CHECK (email IS NOT NULL) exists, Postgres skips the table scan, so the ACCESS EXCLUSIVE lock is held only for a moment. Then drop the now-redundant check in the same transaction. Short lock_timeout with retries, as before.",
+  "kind": "sql",
+  "start": 1792511575.3428946,
+  "end": 1792511575.8367898,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the result: email is NOT NULL and no NULLs exist (fails the plan if not).",
+  "kind": "sql",
+  "start": 1792511575.8367898,
+  "end": 1792511576.2907095,
+  "ok": true,
+  "output": ""
+ }
+]

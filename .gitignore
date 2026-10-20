@@ -1,0 +1,7 @@
+*.tar
+__pycache__/
+archive-leaky/results/*/requests.jsonl
+node_modules/
+results-controls-v1/*/requests.jsonl
+results/*/requests.jsonl
+workspace/

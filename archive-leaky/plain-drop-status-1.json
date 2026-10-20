@@ -1,0 +1,4 @@
+{"task": "drop-status", "steps": [
+  {"note": "The column is NOT dropped: the deployed app (app/server.js) still writes status ('new') on every INSERT and reads it on GET /order/ID, and no setting turns that off. Dropping it now would make every order request fail. This step does only the safe first part of the job: it makes status nullable, so a later app version that stops writing it can roll out without errors. It is a metadata-only change. It takes a short lock, with a 200 ms lock_timeout and retries, so it never makes app queries wait long behind it.",
+   "sql": "DO $$ DECLARE i int; BEGIN FOR i IN 1..30 LOOP BEGIN PERFORM set_config('lock_timeout', '200ms', true); ALTER TABLE orders ALTER COLUMN status DROP NOT NULL; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders after 30 tries'; END $$;"}
+]}

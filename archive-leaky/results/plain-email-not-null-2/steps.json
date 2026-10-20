@@ -1,0 +1,58 @@
+[
+ {
+  "note": "Make the app store '' instead of NULL for guest orders. After the rolling update no writer produces NULL emails any more.",
+  "kind": "deploy",
+  "start": 1792495871.8399615,
+  "end": 1792495875.3412383,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID: enforced for new rows, no scan of existing ones. It needs a brief ACCESS EXCLUSIVE lock, so try with a short lock_timeout and retry instead of queueing in front of the app's queries.",
+  "kind": "sql",
+  "start": 1792495875.3412383,
+  "end": 1792495875.6338058,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill: set email = '' on old guest orders in id batches of 50,000, committing after each batch so row locks and transactions stay short. The app only inserts and reads, so it is never blocked.",
+  "kind": "sql",
+  "start": 1792495875.6338058,
+  "end": 1792495897.5245073,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum away the ~2.5M dead row versions now (SHARE UPDATE EXCLUSIVE, does not block the app), so that autovacuum isn't running on the table when we need the lock later.",
+  "kind": "sql",
+  "start": 1792495897.5245073,
+  "end": 1792495912.879683,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint: a full scan under SHARE UPDATE EXCLUSIVE, which does not block the app's reads or inserts.",
+  "kind": "sql",
+  "start": 1792495912.879683,
+  "end": 1792495914.545626,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL. With the valid CHECK constraint in place, Postgres skips the table scan, so the ACCESS EXCLUSIVE lock lasts only a moment. Short lock_timeout with retries, as before.",
+  "kind": "sql",
+  "start": 1792495914.545626,
+  "end": 1792495914.8791673,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the helper CHECK constraint; the NOT NULL column constraint now covers it. Brief lock again, same retry loop.",
+  "kind": "sql",
+  "start": 1792495914.8791673,
+  "end": 1792495915.2346177,
+  "ok": true,
+  "output": ""
+ }
+]

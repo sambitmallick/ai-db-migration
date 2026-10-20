@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Remove any leftover (invalid) index of the same name from an earlier failed attempt. Concurrent drop: no lock that blocks the app's reads or writes. No-op today (only orders_pkey exists).",
+  "kind": "sql",
+  "start": 1792507706.7507815,
+  "end": 1792507707.0299666,
+  "ok": true,
+  "output": "NOTICE:  index \"orders_customer_id_idx\" does not exist, skipping"
+ },
+ {
+  "note": "Build the index without blocking traffic. CONCURRENTLY takes only a SHARE UPDATE EXCLUSIVE lock, so INSERTs and SELECTs keep running during the build (~10M rows, 751 MB table). Alone in its own step because it cannot run inside a transaction block.",
+  "kind": "sql",
+  "start": 1792507707.0299666,
+  "end": 1792507714.1668615,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the index finished valid and ready; fail the plan loudly if not (a failed concurrent build leaves an INVALID index the planner ignores).",
+  "kind": "sql",
+  "start": 1792507714.1668615,
+  "end": 1792507714.4296927,
+  "ok": true,
+  "output": ""
+ }
+]

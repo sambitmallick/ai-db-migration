@@ -1,0 +1,39 @@
+{
+ "run": "plain-email-not-null-2",
+ "task": "email-not-null",
+ "mode": "plain",
+ "prompt": "/migrate email-not-null plans/plain-email-not-null-2.json",
+ "seconds": 54,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 5,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat tasks/email-not-null/task.md && ls tasks plans && cat db/seed.sql && cat app/server.js && cat k8s/shop.yaml\", \"description\": \"Read task, schema, app, and deployment\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"select version(); select count(*) filter (where email is null), count(*) filter (where email=''), min(id), max(id) from orders; select conname, pg_get_constraintdef"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}'; echo; kubectl get pods -l app=shop\", \"description\": \"Check current app env settings\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-email-not-null-2.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Roll the app so guest orders store '' instead of NULL. After this no new NULL emails are written.\\\",\\n  "
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01Am5abWMz6QFCF89QrpMNqW",
+   "tool_input": {
+    "command": "kubectl get deploy shop -o jsonpath='{.spec.template.spec.containers[0].env}'; echo; kubectl get pods -l app=shop",
+    "description": "Check current app env settings"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-email-not-null-2.json`. I haven't run it or checked the SQL against the database. The live database is PostgreSQL 17 with 2,500,000 orders that have no email.\n\nIt has five steps:\n\n1. **Change the app first:** deploy with `GUEST_EMAIL=empty`, so new guest orders store `''` instead of NULL. This has to come before the database changes, or the old pods would keep inserting NULLs and fail once the column is NOT NULL.\n2. **Fill in the existing guest orders:** change NULL emails to `''` in batches of 50,000 ids, committing after each batch. Rows stay locked only briefly and the app keeps reading and writing throughout.\n3. **Add a \"no NULL email\" check without scanning the table yet:** this needs a brief exclusive lock on `orders`. It waits at most 200 ms each time and retries up to 60 times, so app queries (which time out after 2 s) don't pile up behind it.\n4. **Check every existing row:** this scans the whole table but doesn't block reads or writes. If any NULL is left, it fails and the plan stops here.\n5. **Make `orders.email` NOT NULL:** because the check from step 4 already passed, Postgres doesn't need to scan the table again, so the lock is momentary. The temporary check is then dropped, with the same short-wait retry.\n\nTwo things to know:\n\n- **Current app setting unknown:** I couldn't confirm it because the `kubectl` command was denied. 158 orders already have an empty email, so some pods may already be storing `''`. Step 1 works either way.\n- **Retries can run out:** if `orders` stays busy for all 60 attempts in step 3 or 5, that step fails and the plan stops there."
+}

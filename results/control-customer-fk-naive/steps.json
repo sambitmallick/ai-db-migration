@@ -1,0 +1,10 @@
+[
+ {
+  "note": "ADD FOREIGN KEY (validates every row while blocking writes)",
+  "kind": "sql",
+  "start": 1792491527.953668,
+  "end": 1792491531.1377344,
+  "ok": true,
+  "output": ""
+ }
+]

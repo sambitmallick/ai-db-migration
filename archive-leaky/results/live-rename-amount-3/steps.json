@@ -1,0 +1,50 @@
+[
+ {
+  "note": "In one transaction (metadata only, no rewrite): rename the table to orders_t, rename its column amount to total, and put an auto-updatable view named orders in front of it that exposes the column under both names (amount and total). Old pods keep reading/writing amount, new pods can use total, both hit the same column. The ACCESS EXCLUSIVE lock is taken with a 200ms lock_timeout and retried, so app queries are never queued behind it for long. Fails (and changes nothing) if orders.amount does not exist.",
+  "kind": "sql",
+  "start": 1792498440.9356782,
+  "end": 1792498441.3556032,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Sanity check: both names resolve through the view.",
+  "kind": "sql",
+  "start": 1792498441.3556032,
+  "end": 1792498441.7598164,
+  "ok": true,
+  "output": "10000736|740.52|740.52"
+ },
+ {
+  "note": "Roll the app over to read and write total (guest email unchanged). During the rollout old pods use amount, new pods use total; never both in one INSERT.",
+  "kind": "deploy",
+  "start": 1792498441.7598164,
+  "end": 1792498445.6965559,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let terminating old pods finish (3 s drain + up to 2 s in-flight queries) before the amount alias goes away.",
+  "kind": "wait",
+  "start": 1792498445.6965559,
+  "end": 1792498460.6990414,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "In one transaction: drop the view and rename the table back to orders. The table now has total numeric(10,2) NOT NULL and no amount column; index, sequence and stats are unchanged. Same short lock_timeout + retry.",
+  "kind": "sql",
+  "start": 1792498460.6990414,
+  "end": 1792498461.1234078,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Verify the final shape: orders is a table, total is numeric(10,2) NOT NULL, amount is gone.",
+  "kind": "sql",
+  "start": 1792498461.1234078,
+  "end": 1792498461.542081,
+  "ok": true,
+  "output": ""
+ }
+]

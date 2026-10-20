@@ -1,0 +1,4 @@
+{"task": "drop-status", "steps": [
+  {"note": "NOT dropping orders.status: app/server.js still writes it on every INSERT (status = 'new') and reads it in GET /order/ID, and no env setting turns that off, so a DROP now would break order creation and order reads on all replicas. This step only prepares for the drop: a column default (metadata-only, instant) so that an app version which stops writing status can insert without it. lock_timeout keeps the brief table lock from queueing behind live traffic; if it can't get the lock, the step fails safely.",
+   "sql": "SET lock_timeout = '2s'; ALTER TABLE orders ALTER COLUMN status SET DEFAULT 'new';"}
+]}

@@ -1,0 +1,47 @@
+{
+ "task": "customer-fk",
+ "label": "live-customer-fk-3",
+ "plan": "plans/live-customer-fk-3.json",
+ "steps": 3,
+ "steps_run": 3,
+ "completed": true,
+ "empty_plan": false,
+ "failed_step": null,
+ "migration_seconds": 3.9,
+ "baseline": {
+  "requests": 1386,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 11,
+  "max_ms": 87
+ },
+ "during": {
+  "requests": 243,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 23,
+  "max_ms": 56
+ },
+ "after": {
+  "requests": 1839,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 4,
+  "p99_ms": 10,
+  "max_ms": 70
+ },
+ "max_sessions_waiting_on_lock": 0,
+ "longest_lock_wait_s": 0.0,
+ "traffic": {
+  "baseline_rps": 61.3,
+  "during_rps": 61.7,
+  "after_rps": 61.3
+ },
+ "traffic_ok": true,
+ "checks_passed": 4,
+ "checks": 4,
+ "failed_checks": [],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

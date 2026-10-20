@@ -1,0 +1,26 @@
+{
+ "run": "plain-customer-fk-1",
+ "task": "customer-fk",
+ "mode": "plain",
+ "prompt": "/migrate customer-fk plans/plain-customer-fk-1.json",
+ "seconds": 58,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat tasks/customer-fk/task.md; ls tasks/customer-fk; cat db/seed.sql; cat app/server.js; cat k8s/shop.yaml; cat scripts/db-ro.sh; ls plans\", \"description\": \"Read task, schema, app, and k8s files\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"\\\\d customers\\\"; bash scripts/db-ro.sh \\\"SELECT count(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.id=o.customer_id);\\\"; bash scripts/db-ro.sh \\\"SELECT min(customer_id), max(customer_id), (SELECT max("
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-fk-1.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the foreign key as NOT VALID: no table scan, so the SHARE ROW EXCLUSIVE lock on orders/customers is held o"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I've written the plan to `plans/plain-customer-fk-1.json`. It adds the foreign key without blocking the app's reads or inserts. I checked the live database but haven't run the plan. The live database has no orders pointing at a missing customer right now, so the check should pass.\n\n1. **Add the key without checking old rows.** This adds `orders_customer_id_fkey` \u2192 `customers(id)` as `NOT VALID`, so Postgres doesn't scan the 10M orders. It needs a lock that blocks inserts on `orders`, but only for an instant. Each attempt waits at most 300 ms for that lock, which stops app inserts piling up behind it, and it tries up to 30 times. From this step on, every new or updated order must point at an existing customer.\n2. **Check the existing rows.** This runs `VALIDATE CONSTRAINT` over the 10M orders with no statement timeout. Its lock doesn't block the app's reads or inserts.\n3. **Confirm.** The plan fails at this step if the constraint is missing or not validated.\n\nThe app doesn't need a new deploy. One change in behaviour: once step 1 runs, an order for a customer ID that doesn't exist gets an error (HTTP 500) instead of being saved. That's what the task asks for.\n\nDecision for you: I didn't add an index on `orders.customer_id`. Without one, deleting a customer or changing a customer's ID makes Postgres scan all 10M orders to check the key. The app does neither today. The index would also speed up `/customer/C`. It can be added later with `CREATE INDEX CONCURRENTLY` without blocking the app; say if you want it in this plan."
+}

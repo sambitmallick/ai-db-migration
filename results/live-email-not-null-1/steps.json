@@ -1,0 +1,58 @@
+[
+ {
+  "note": "Roll the app so new guest orders store '' instead of NULL. Nothing in the database has changed yet, so old and new pods both work during the rollout.",
+  "kind": "deploy",
+  "start": 1792511143.549759,
+  "end": 1792511146.7529664,
+  "ok": true,
+  "output": "yment \"shop\" rollout to finish: 2 out of 3 new replicas have been updated...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\nWaiting for deployment \"shop\" rollout to finish: 1 old replicas are pending termination...\ndeployment \"shop\" successfully rolled out"
+ },
+ {
+  "note": "Let the last in-flight requests from the old pods finish.",
+  "kind": "wait",
+  "start": 1792511146.7529664,
+  "end": 1792511151.7537518,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Add CHECK (email IS NOT NULL) NOT VALID. From now on no NULL email can be written, but existing rows are not checked yet. This needs a brief ACCESS EXCLUSIVE lock, so each attempt waits at most 100 ms (shorter than the app's 2 s timeout) and gives up, then retries, so app queries never pile up behind it.",
+  "kind": "sql",
+  "start": 1792511151.7537518,
+  "end": 1792511152.1892986,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill: set email = '' on the guest orders that have NULL, in batches of 50,000 ids, one commit per batch with a short pause. The app only inserts and reads, so these row locks never block it. Only rows that are NULL are touched; no other column or row changes. The upper bound is read after the constraint is in place, so every row above it already has an email.",
+  "kind": "sql",
+  "start": 1792511152.1892986,
+  "end": 1792511187.8375146,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the constraint: one full scan proving there are no NULLs left. It takes only a SHARE UPDATE EXCLUSIVE lock, which does not block the app's reads or inserts. Fails (and stops the plan) if any NULL were left.",
+  "kind": "sql",
+  "start": 1792511187.8375146,
+  "end": 1792511196.8320515,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "SET NOT NULL. Postgres 17 uses the validated CHECK constraint to prove there are no NULLs and skips the table scan, so the ACCESS EXCLUSIVE lock is held only for a moment. Then drop the now-redundant CHECK in the same transaction. Same short lock_timeout with retry as above.",
+  "kind": "sql",
+  "start": 1792511196.8320515,
+  "end": 1792511197.2371871,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check the result: orders.email is NOT NULL.",
+  "kind": "sql",
+  "start": 1792511197.2371871,
+  "end": 1792511197.6841817,
+  "ok": true,
+  "output": ""
+ }
+]

@@ -1,0 +1,51 @@
+{
+ "run": "live-email-not-null-3",
+ "task": "email-not-null",
+ "mode": "live",
+ "prompt": "/migrate email-not-null plans/live-email-not-null-3.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 83,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 7,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\email-not-null\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls plans tasks scripts; cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select version(); select count(*) filter (where email is null), count(*) from orders; select conname, pg_get_constraintdef(oid), convalidated from pg_constraint where conrelid='o"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-email-not-null-3.json\", \"content\": \"{\\\"task\\\": \\\"email-not-null\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Roll the app so new guest orders store '' instead of NULL. The column is still nullable, so old and new p"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=require('./plans/live-email-not-null-3.json'); console.log(p.steps.length)\\\"\", \"description\": \"Check the plan file parses as JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01UC6HbyY818wu9VA6caV18q",
+   "tool_input": {
+    "command": "node -e \"const p=require('./plans/live-email-not-null-3.json'); console.log(p.steps.length)\"",
+    "description": "Check the plan file parses as JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-email-not-null-3.json`. It hasn't been run, and I couldn't check that the file parses as JSON because running a check command was denied. I wrote it by hand to be valid.\n\nFrom the live database: 2,500,000 of the ~10,000,000 orders have a NULL email. The only index is the primary key, and the table has no triggers or other constraints.\n\n**What the plan does, in order:**\n\n1. **Deploy `GUEST_EMAIL=empty`**, so new guest orders store `''` instead of NULL. The column still accepts NULL here, so old and new pods can run side by side during the rolling update. Then it waits 10s for requests still running on old pods to finish.\n2. **Add `CHECK (email IS NOT NULL) NOT VALID`.** This changes only the table definition, but it needs a brief exclusive lock on the table. It asks with a 200 ms lock timeout and retries, so app requests wait at most about 200 ms behind it. From this point no new NULL can be written.\n3. **Fill in the old guest orders:** `UPDATE ... SET email = '' WHERE email IS NULL`, in id ranges of 100,000, with a commit after each range. Orders that already have an email aren't touched. The app never updates orders, so it never waits on these updates.\n4. **Validate the constraint.** This scans the table but doesn't block reads or writes. If any NULL is left, this step fails and the plan stops with nothing broken.\n5. **`SET NOT NULL`.** Postgres 17 uses the validated check to skip scanning the table again, so the exclusive lock is only held for a moment. It uses the same timeout-and-retry.\n6. **Drop the helper check constraint**, again with the same short lock and retry.\n\n**Two things that could stop it partway:**\n- The three filling, `SET NOT NULL` and drop steps each run as a single `DO` statement. The fill step commits inside its `DO` block, which only works if the runner really runs each statement on its own, as the skill says.\n- If a lock still can't be taken after 100 tries (about 50 seconds in total), that step fails and the p"
+}

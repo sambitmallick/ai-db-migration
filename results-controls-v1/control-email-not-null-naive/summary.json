@@ -1,0 +1,47 @@
+{
+ "task": "email-not-null",
+ "label": "control-email-not-null-naive",
+ "plan": "controls/email-not-null/naive.json",
+ "steps": 2,
+ "steps_run": 2,
+ "completed": false,
+ "failed_step": {
+  "n": 2,
+  "note": "SET NOT NULL",
+  "output": "ERROR:  column \"email\" of relation \"orders\" contains null values\ncommand terminated with exit code 3"
+ },
+ "migration_seconds": 24.0,
+ "baseline": {
+  "requests": 1253,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 3,
+  "p99_ms": 103,
+  "max_ms": 154
+ },
+ "during": {
+  "requests": 1477,
+  "failed": 242,
+  "failed_writes": 116,
+  "p50_ms": 5,
+  "p99_ms": 3003,
+  "max_ms": 3014
+ },
+ "after": {
+  "requests": 1844,
+  "failed": 0,
+  "failed_writes": 0,
+  "p50_ms": 5,
+  "p99_ms": 236,
+  "max_ms": 1477
+ },
+ "max_sessions_waiting_on_lock": 24,
+ "longest_lock_wait_s": 1.99,
+ "checks_passed": 3,
+ "checks": 5,
+ "failed_checks": [
+  "orders.email is NOT NULL",
+  "guest orders placed during the migration were stored, with an empty email"
+ ],
+ "app_env": "DATABASE_URL=postgres://postgres:shop@postgres:5432/shop AMOUNT_READ=amount AMOUNT_WRITE=amount GUEST_EMAIL=null"
+}

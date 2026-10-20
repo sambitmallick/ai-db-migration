@@ -1,0 +1,22 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Roll the app so new guest orders store '' instead of NULL. Nothing in the database has changed yet, so old and new pods both work during the rollout.",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+
+  {"note": "Let the last in-flight requests from the old pods finish.",
+   "wait": 5},
+
+  {"note": "Add CHECK (email IS NOT NULL) NOT VALID. From now on no NULL email can be written, but existing rows are not checked yet. This needs a brief ACCESS EXCLUSIVE lock, so each attempt waits at most 100 ms (shorter than the app's 2 s timeout) and gives up, then retries, so app queries never pile up behind it.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '100ms', true); ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.2 + random() * 0.3); END; END LOOP; END $$;"},
+
+  {"note": "Backfill: set email = '' on the guest orders that have NULL, in batches of 50,000 ids, one commit per batch with a short pause. The app only inserts and reads, so these row locks never block it. Only rows that are NULL are touched; no other column or row changes. The upper bound is read after the constraint is in place, so every row above it already has an email.",
+   "sql": "DO $$ DECLARE lo bigint := 0; hi bigint; BEGIN SELECT coalesce(max(id), 0) INTO hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET email = '' WHERE id >= lo AND id < lo + 50000 AND email IS NULL; COMMIT; PERFORM pg_sleep(0.05); lo := lo + 50000; END LOOP; END $$;"},
+
+  {"note": "Validate the constraint: one full scan proving there are no NULLs left. It takes only a SHARE UPDATE EXCLUSIVE lock, which does not block the app's reads or inserts. Fails (and stops the plan) if any NULL were left.",
+   "sql": "ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL. Postgres 17 uses the validated CHECK constraint to prove there are no NULLs and skips the table scan, so the ACCESS EXCLUSIVE lock is held only for a moment. Then drop the now-redundant CHECK in the same transaction. Same short lock_timeout with retry as above.",
+   "sql": "DO $$ DECLARE i int := 0; BEGIN LOOP BEGIN PERFORM set_config('lock_timeout', '100ms', true); ALTER TABLE orders ALTER COLUMN email SET NOT NULL; ALTER TABLE orders DROP CONSTRAINT orders_email_not_null; EXIT; EXCEPTION WHEN lock_not_available THEN i := i + 1; IF i >= 100 THEN RAISE; END IF; PERFORM pg_sleep(0.2 + random() * 0.3); END; END LOOP; END $$;"},
+
+  {"note": "Check the result: orders.email is NOT NULL.",
+   "sql": "DO $$ BEGIN IF NOT (SELECT attnotnull FROM pg_attribute WHERE attrelid = 'orders'::regclass AND attname = 'email') THEN RAISE EXCEPTION 'orders.email is not NOT NULL'; END IF; END $$;"}
+]}

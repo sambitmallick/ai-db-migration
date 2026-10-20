@@ -1,0 +1,1 @@
+SQUAWK lock risk: adding-foreign-key-constraint, constraint-missing-not-valid | may break app: none | hygiene: 3

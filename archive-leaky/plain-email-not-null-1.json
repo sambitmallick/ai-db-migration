@@ -1,0 +1,18 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Roll out the app so guest orders store '' instead of NULL. No schema change yet, so old and new pods both work during the rollout.",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+  {"note": "Let terminating old pods finish their in-flight requests (3 s drain + 2 s statement timeout) before NULLs are rejected.",
+   "wait": 10},
+  {"note": "Add CHECK (email IS NOT NULL) NOT VALID: new rows are checked from now on, existing rows are not scanned. Brief ACCESS EXCLUSIVE lock, taken with a short lock_timeout and retried so it never queues app traffic for long.",
+   "sql": "SET lock_timeout = '300ms'; DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to add constraint'; END $$;"},
+  {"note": "Backfill: set email = '' on the ~2.5M old guest orders, in 50k-id batches by primary key, committing each batch so locks and transactions stay short.",
+   "sql": "SET statement_timeout = 0; DO $$ DECLARE lo bigint := 1; hi bigint; BEGIN SELECT max(id) INTO hi FROM orders; WHILE lo <= hi LOOP UPDATE orders SET email = '' WHERE id >= lo AND id < lo + 50000 AND email IS NULL; COMMIT; lo := lo + 50000; PERFORM pg_sleep(0.05); END LOOP; END $$;"},
+  {"note": "Check the backfill left no NULLs (fails the plan here if it did).",
+   "sql": "SET statement_timeout = 0; DO $$ BEGIN IF EXISTS (SELECT 1 FROM orders WHERE email IS NULL) THEN RAISE EXCEPTION 'orders still has NULL emails'; END IF; END $$;"},
+  {"note": "Validate the constraint: full scan under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts.",
+   "sql": "SET statement_timeout = 0; ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+  {"note": "SET NOT NULL: Postgres 12+ uses the validated CHECK to skip the table scan, so the ACCESS EXCLUSIVE lock is held only for a moment. Short lock_timeout with retries.",
+   "sql": "SET lock_timeout = '300ms'; DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN ALTER TABLE orders ALTER COLUMN email SET NOT NULL; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to set NOT NULL'; END $$;"},
+  {"note": "Drop the now-redundant CHECK constraint (separate statement, so it is still in place when SET NOT NULL checks for it).",
+   "sql": "SET lock_timeout = '300ms'; DO $$ BEGIN FOR i IN 1..100 LOOP BEGIN ALTER TABLE orders DROP CONSTRAINT orders_email_not_null; RETURN; EXCEPTION WHEN lock_not_available THEN PERFORM pg_sleep(0.5); END; END LOOP; RAISE EXCEPTION 'could not lock orders to drop constraint'; END $$;"}
+]}

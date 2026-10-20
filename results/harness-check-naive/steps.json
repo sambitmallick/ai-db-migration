@@ -1,0 +1,10 @@
+[
+ {
+  "note": "CREATE INDEX (blocks writes while it builds)",
+  "kind": "sql",
+  "start": 1792492686.6329677,
+  "end": 1792492690.852197,
+  "ok": true,
+  "output": ""
+ }
+]

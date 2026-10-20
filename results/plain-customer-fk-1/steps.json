@@ -1,0 +1,26 @@
+[
+ {
+  "note": "Add the foreign key as NOT VALID: no table scan, so the SHARE ROW EXCLUSIVE lock on orders/customers is held only for an instant. From here on every new or updated order must reference an existing customer. Short lock_timeout so the ALTER never queues app INSERTs behind it for long; retry up to 30 times if it cannot get the lock.",
+  "kind": "sql",
+  "start": 1792506539.674859,
+  "end": 1792506540.012671,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate the existing 10M rows. VALIDATE takes only SHARE UPDATE EXCLUSIVE on orders and ROW SHARE on customers, so app reads and inserts keep running during the scan. No statement timeout for this long scan.",
+  "kind": "sql",
+  "start": 1792506540.0165355,
+  "end": 1792506542.4601393,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check: the constraint exists and is validated (fails the plan otherwise).",
+  "kind": "sql",
+  "start": 1792506542.4601393,
+  "end": 1792506542.7267363,
+  "ok": true,
+  "output": ""
+ }
+]

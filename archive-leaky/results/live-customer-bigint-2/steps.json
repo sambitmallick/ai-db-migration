@@ -1,0 +1,226 @@
+[
+ {
+  "note": "Create the trigger function that copies customer_id into the new bigint column. Takes no lock on orders.",
+  "kind": "sql",
+  "start": 1792499303.6472752,
+  "end": 1792499303.9265583,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "One short transaction: take the table lock with a 300 ms lock_timeout and retry until it is free, so app queries wait 300 ms at most and none time out. Then add a nullable customer_id_new bigint column (a metadata-only change, no rewrite), the sync trigger, and NOT VALID checks that the new column is non-null and equal to customer_id. From here on every new row gets both columns.",
+  "kind": "sql",
+  "start": 1792499303.9265583,
+  "end": 1792499304.1796453,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1..1,000,000 in batches of 50,000, committing after each batch. Only old rows get row locks, and the app never updates rows.",
+  "kind": "sql",
+  "start": 1792499304.1796453,
+  "end": 1792499308.5193772,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum so the next chunk can reuse the space of the dead row versions and the table does not double in size. Does not block reads or writes.",
+  "kind": "sql",
+  "start": 1792499308.5193772,
+  "end": 1792499309.4167218,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 1,000,001..2,000,000.",
+  "kind": "sql",
+  "start": 1792499309.4167218,
+  "end": 1792499313.800026,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499313.800026,
+  "end": 1792499314.7957718,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 2,000,001..3,000,000.",
+  "kind": "sql",
+  "start": 1792499314.7957718,
+  "end": 1792499319.116805,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499319.116805,
+  "end": 1792499319.9957142,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 3,000,001..4,000,000.",
+  "kind": "sql",
+  "start": 1792499319.9957142,
+  "end": 1792499324.475136,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499324.475136,
+  "end": 1792499325.4355648,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 4,000,001..5,000,000.",
+  "kind": "sql",
+  "start": 1792499325.4355648,
+  "end": 1792499329.760068,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499329.760068,
+  "end": 1792499330.6415663,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 5,000,001..6,000,000.",
+  "kind": "sql",
+  "start": 1792499330.6415663,
+  "end": 1792499335.5769486,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499335.5769486,
+  "end": 1792499336.7977314,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 6,000,001..7,000,000.",
+  "kind": "sql",
+  "start": 1792499336.7977314,
+  "end": 1792499341.3739522,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499341.3739522,
+  "end": 1792499342.4445047,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 7,000,001..8,000,000.",
+  "kind": "sql",
+  "start": 1792499342.4445047,
+  "end": 1792499346.91888,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499346.91888,
+  "end": 1792499347.895099,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 8,000,001..9,000,000.",
+  "kind": "sql",
+  "start": 1792499347.895099,
+  "end": 1792499352.6159651,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499352.621294,
+  "end": 1792499353.5830684,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill ids 9,000,001..10,000,000.",
+  "kind": "sql",
+  "start": 1792499353.5830684,
+  "end": 1792499358.2995217,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Vacuum.",
+  "kind": "sql",
+  "start": 1792499358.2995217,
+  "end": 1792499359.2326097,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Backfill any rows above id 10,000,000 that were inserted before the trigger existed. Rows inserted after it already have the value.",
+  "kind": "sql",
+  "start": 1792499359.2326097,
+  "end": 1792499359.5187993,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Validate both checks. This takes a SHARE UPDATE EXCLUSIVE lock, so app reads and writes keep running. If any row is NULL or differs from customer_id, this fails and stops the plan before anything is dropped.",
+  "kind": "sql",
+  "start": 1792499359.5187993,
+  "end": 1792499361.567334,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Clean up dead rows and collect statistics for the new column. Statistics carry over through the rename, so the /customer query keeps its plan.",
+  "kind": "sql",
+  "start": 1792499361.567334,
+  "end": 1792499362.0100873,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Swap in one short transaction, with the same 300 ms lock_timeout and retry. SET NOT NULL skips the table scan because the validated check already proves no NULLs. Then drop the trigger and checks, drop the old integer column (its values are proven identical), and rename customer_id_new to customer_id. Catalog changes only, so it takes milliseconds.",
+  "kind": "sql",
+  "start": 1792499362.0100873,
+  "end": 1792499362.2674985,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Drop the trigger function, which is no longer used.",
+  "kind": "sql",
+  "start": 1792499362.2674985,
+  "end": 1792499362.5023308,
+  "ok": true,
+  "output": ""
+ },
+ {
+  "note": "Check that orders.customer_id is now bigint NOT NULL.",
+  "kind": "sql",
+  "start": 1792499362.5023308,
+  "end": 1792499362.752505,
+  "ok": true,
+  "output": ""
+ }
+]

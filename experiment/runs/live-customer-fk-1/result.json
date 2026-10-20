@@ -1,0 +1,55 @@
+{
+ "run": "live-customer-fk-1",
+ "task": "customer-fk",
+ "mode": "live",
+ "prompt": "/migrate customer-fk plans/live-customer-fk-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 64,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 4,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-fk\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; ls tasks plans; cat k8s/shop.yaml | head -80\", \"description\": \"Inspect helper script, tasks, plans, k8s manifest\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version(); \\\\d orders\\\" ; bash scripts/db-ro.sh \\\"\\\\d customers\\\"; bash scripts/db-ro.sh \\\"select count(*), max(id) from customers; select conname, contype, convalidated, conrelid::regclass from pg_constraint where conrelid in ('orders'::regclass,'customer"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select version();\\\" ; bash scripts/db-ro.sh \\\"select count(*) from orders o where not exists (select 1 from customers c where c.id=o.customer_id);\\\"; bash scripts/db-ro.sh \\\"select tgname from pg_trigger where tgrelid in ('orders'::regclass,'customers'::regclass)"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-fk-1.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Pre-check: refuse to go on if any order references a missing customer (live DB has 0 today). Nothing is deleted"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=require('./plans/live-customer-fk-1.json'); console.log(p.steps.length,'steps ok')\\\"\", \"description\": \"Check the plan file is valid JSON\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_015L4En5audHrn22rn73CtBi",
+   "tool_input": {
+    "command": "node -e \"const p=require('./plans/live-customer-fk-1.json'); console.log(p.steps.length,'steps ok')\"",
+    "description": "Check the plan file is valid JSON"
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-fk-1.json`. It's four SQL steps and needs no app deploys. I haven't run it against a test copy. I also couldn't run the JSON syntax check (permission was denied), though I checked the file by eye.\n\nThe live database has no orders pointing to a missing customer right now. So the foreign key can be added without deleting or changing any rows.\n\n1. **Pre-check:** it looks again for orders whose customer doesn't exist. If it finds any, the plan stops before changing anything.\n2. **Add the foreign key as `NOT VALID`:** this changes only the table definition and doesn't scan the data. It needs a brief lock on `orders` and `customers` that blocks inserts for a moment, so it gives up after 200 ms if it can't get the lock and tries again, up to 50 times. That way it never holds up live requests for more than a fraction of a second. From this step on, every new order is checked.\n3. **Validate the existing 10M orders:** this scan holds only a weak lock that doesn't block reads or inserts, so traffic keeps running while it works.\n4. **Confirm:** it checks that `orders_customer_id_fkey` exists and is validated, and fails the step if not.\n\nOnce this is in, an order for a customer ID that doesn't exist will be rejected with a 500 error. That is the point of the foreign key. But if anything in the live traffic currently sends made-up customer IDs, those requests will start failing. None of the existing orders do this."
+}

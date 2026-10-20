@@ -1,0 +1,6 @@
+$ podman save -o shop-db.tar localhost/shop-db:1.0 && podman save -o postgres.tar docker.io/library/postgres:17-alpine && kind load image-archive shop-db.tar --name dbmig && kind load image-archive postgres.tar --name dbmig
+using podman due to KIND_EXPERIMENTAL_PROVIDER
+enabling experimental podman provider
+using podman due to KIND_EXPERIMENTAL_PROVIDER
+enabling experimental podman provider
+[exit 0, 18s]

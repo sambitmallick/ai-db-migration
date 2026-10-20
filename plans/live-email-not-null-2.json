@@ -1,0 +1,25 @@
+{"task": "email-not-null", "steps": [
+  {"note": "Make the app write '' instead of NULL for guest orders. The deploy waits for the rolling update; old pods keep their old setting until they are replaced.",
+   "deploy": {"GUEST_EMAIL": "empty"}},
+
+  {"note": "Let the old pods finish their in-flight requests and exit (3 s drain + 2 s statement timeout), so nothing writes NULL emails any more.",
+   "wait": 15},
+
+  {"note": "Backfill: set email = '' on guest orders (email IS NULL) in small id-range batches, committing each one. This only touches old rows the app never updates, so it takes no lock the app waits on. The upper bound is read again on every loop, so rows inserted during the backfill are covered too. Rows with an email, and the 28 rows that already have '', are not touched.",
+   "sql": "DO $$\nDECLARE\n  lo bigint := 0;\n  step constant bigint := 20000;\nBEGIN\n  PERFORM set_config('statement_timeout', '0', false);\n  PERFORM set_config('lock_timeout', '2s', false);\n  WHILE lo <= (SELECT coalesce(max(id), 0) FROM orders) LOOP\n    UPDATE orders SET email = '' WHERE id >= lo AND id < lo + step AND email IS NULL;\n    COMMIT;\n    lo := lo + step;\n    PERFORM pg_sleep(0.02);\n  END LOOP;\nEND $$;"},
+
+  {"note": "Add CHECK (email IS NOT NULL) as NOT VALID: it is enforced for new writes but existing rows are not scanned. It needs a brief ACCESS EXCLUSIVE lock, so try with a 200 ms lock_timeout and retry, so app queries never queue behind it for long.",
+   "sql": "DO $$\nDECLARE i int;\nBEGIN\n  PERFORM set_config('lock_timeout', '200ms', true);\n  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'orders'::regclass AND conname = 'orders_email_not_null') THEN RETURN; END IF;\n  FOR i IN 1..60 LOOP\n    BEGIN\n      ALTER TABLE orders ADD CONSTRAINT orders_email_not_null CHECK (email IS NOT NULL) NOT VALID;\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.5);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to add the check constraint';\nEND $$;"},
+
+  {"note": "Last sweep: catch any NULL written between the backfill and the constraint (normally none). From here on no NULL can be written.",
+   "sql": "SET statement_timeout = 0; UPDATE orders SET email = '' WHERE email IS NULL;"},
+
+  {"note": "Validate the constraint. This scans the table under SHARE UPDATE EXCLUSIVE, which does not block reads or inserts. If any NULL were left it fails here and the plan stops before the column is changed.",
+   "sql": "SET statement_timeout = 0; SET lock_timeout = '10s'; ALTER TABLE orders VALIDATE CONSTRAINT orders_email_not_null;"},
+
+  {"note": "SET NOT NULL. Because a valid CHECK (email IS NOT NULL) exists, Postgres skips the table scan, so the ACCESS EXCLUSIVE lock is held only for a moment. Then drop the now-redundant check in the same transaction. Short lock_timeout with retries, as before.",
+   "sql": "DO $$\nDECLARE i int;\nBEGIN\n  PERFORM set_config('lock_timeout', '200ms', true);\n  FOR i IN 1..60 LOOP\n    BEGIN\n      ALTER TABLE orders ALTER COLUMN email SET NOT NULL;\n      ALTER TABLE orders DROP CONSTRAINT orders_email_not_null;\n      RETURN;\n    EXCEPTION WHEN lock_not_available THEN\n      PERFORM pg_sleep(0.5);\n    END;\n  END LOOP;\n  RAISE EXCEPTION 'could not lock orders to set NOT NULL';\nEND $$;"},
+
+  {"note": "Check the result: email is NOT NULL and no NULLs exist (fails the plan if not).",
+   "sql": "DO $$ BEGIN IF NOT (SELECT attnotnull FROM pg_attribute WHERE attrelid = 'orders'::regclass AND attname = 'email') THEN RAISE EXCEPTION 'orders.email is not NOT NULL'; END IF; END $$;"}
+]}

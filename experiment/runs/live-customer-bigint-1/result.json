@@ -1,0 +1,66 @@
+{
+ "run": "live-customer-bigint-1",
+ "task": "customer-bigint",
+ "mode": "live",
+ "prompt": "/migrate customer-bigint plans/live-customer-bigint-1.json This migration runs on the production database while the shop is serving live traffic (about 60 requests a second). It must not cause errors or downtime, and it must not lose or change any data.",
+ "seconds": 177,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 18,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-bigint\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"\\\\d+ orders\\\" ; bash scripts/db-ro.sh \\\"select version(); select count(*), max(id), min(customer_id), max(customer_id) from orders; select pg_size_pretty(pg_total_relation_size('orders')); select tgname from pg_trigger where not tgisinternal"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"ls harness plans tasks scripts; ls plans | head -50\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"select state, wait_event_type, now()-query_start as dur, left(query,90) from pg_stat_activity where datname='shop' and pid<>pg_backend_pid(); select seq_scan, seq_tup_read, idx_scan, n_tup_ins, n_tup_upd, n_live_tup from pg_stat_user_tables where relname='orders'"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"bash scripts/db-ro.sh \\\"explain (analyze, buffers) SELECT id, amount FROM orders WHERE customer_id = 123 ORDER BY id DESC LIMIT 10;\\\" ; bash scripts/db-ro.sh \\\"select relpages, reltuples from pg_class where relname='orders'; select name, setting from pg_settings where name in ('shared_b"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-bigint-1.json\", \"content\": \"{\\\"task\\\": \\\"customer-bigint\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Trigger function that keeps the new bigint column equal to customer_id on every insert/update. Creating"
+  },
+  {
+   "tool": "Edit",
+   "input": "{\"replace_all\": false, \"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\live-customer-bigint-1.json\", \"old_string\": \"END LOOP; IF EXISTS (SELECT 1 FROM orders WHERE customer_id_new IS DISTINCT FROM customer_id LIMIT 1) THEN RAISE EXCEPTION 'customer_id_new"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"node -e \\\"const p=require('./plans/live-customer-bigint-1.json'); console.log(p.task, p.steps.length)\\\"\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01VHqnhxmpq14FLcp4qjmnF2",
+   "tool_input": {
+    "command": "node -e \"const p=require('./plans/live-customer-bigint-1.json'); console.log(p.task, p.steps.length)\""
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/live-customer-bigint-1.json`. It hasn't been run. I also couldn't check that the file parses as JSON, because running `node` was denied. The SQL uses only single quotes, so there should be no escaping problems.\n\nChanging the column type directly would rewrite all 10M rows while locking the table, which means downtime. So the plan adds a new bigint column alongside the old one, fills it, and swaps it in:\n\n1. **Add the new column:** a short transaction adds `customer_id_new bigint` (no rewrite), two checks (not null, and equal to `customer_id`) that aren't validated yet, and a trigger that copies `customer_id` into the new column on every insert or update.\n2. **Fill existing rows:** five steps, each covering about 2M ids in batches of 20,000 with a commit per batch. Each step is followed by a `VACUUM` so the table doesn't grow to double its size. The app only inserts and reads, so the batches never block it.\n3. **Check the data:** validating the two checks scans the table without blocking reads or inserts. The equality check proves every value is unchanged. If any row was missed or differs, the plan stops there with the old column still in use. Then `ANALYZE` gathers statistics so the `/customer` query keeps its current plan (about 90 ms).\n4. **Swap:** one short transaction sets NOT NULL (no scan, thanks to the validated check), drops the checks and trigger, drops the old integer column and renames `customer_id_new` to `customer_id`. The app refers to the column by name, so no deploy is needed.\n5. **Clean up and confirm:** drop the trigger function, then check that `customer_id` is bigint NOT NULL.\n\nBoth steps that take the table lock wait at most 100 ms per try and retry up to 300 times. App queries are never held up for more than about 100 ms. If the lock can't be taken, the step fails and the database is left consistent.\n\nThe column now comes last in the table. Also, the app's `GET /order/ID` will return `customer_id` as a string (`\"123\"`"
+}

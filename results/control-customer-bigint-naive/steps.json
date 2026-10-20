@@ -1,0 +1,10 @@
+[
+ {
+  "note": "ALTER COLUMN TYPE bigint (rewrites the table under an exclusive lock)",
+  "kind": "sql",
+  "start": 1792490908.7616806,
+  "end": 1792490920.8838737,
+  "ok": true,
+  "output": ""
+ }
+]

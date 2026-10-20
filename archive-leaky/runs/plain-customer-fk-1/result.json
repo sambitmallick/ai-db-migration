@@ -1,0 +1,38 @@
+{
+ "run": "plain-customer-fk-1",
+ "task": "customer-fk",
+ "mode": "plain",
+ "prompt": "/migrate customer-fk plans/plain-customer-fk-1.json",
+ "seconds": 70,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 3,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-fk\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh && bash scripts/db-ro.sh \\\"SELECT count(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM customers c WHERE c.id=o.customer_id);\\\" ; bash scripts/db-ro.sh \\\"SELECT conname, contype, conrelid"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && bash scripts/db-ro.sh \\\"SELECT pid, usename, state, now()-xact_start AS xact_age, wait_event_type, left(query,80) FROM pg_stat_activity WHERE datname='shop' ORDER BY xact_start;\\\" ; bash scripts/db-ro.sh \\\"SELE"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-fk-1.json\", \"content\": \"{\\\"task\\\": \\\"customer-fk\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Add the foreign key as NOT VALID: checks every new/updated order from now on without scanning the 10M existing"
+  }
+ ],
+ "permission_denials": [],
+ "answer": "I wrote the plan to `plans/plain-customer-fk-1.json`. It has three SQL steps and no app deploy, because the app's queries don't change.\n\n1. **Add the foreign key without checking old rows.** It adds `orders_customer_id_fkey` (`orders.customer_id` \u2192 `customers.id`) as `NOT VALID`, so only new orders are checked. This needs a short lock that blocks inserts. To avoid stalling the app behind in-flight inserts, it gives up on the lock after 200 ms and tries again, up to 50 times. If the key already exists, the step does nothing.\n2. **Check the existing 10M orders.** This uses `VALIDATE CONSTRAINT`, whose lock doesn't block the app's reads or inserts during the scan. It turns off the statement timeout because the scan may take a while, but caps lock waits at 10 s.\n3. **Confirm it worked.** The last step fails if the key is missing or not yet checked.\n\nI checked the live database just now: it has no orders pointing at a missing customer, and no other sessions were running. If a bad order shows up before the plan runs, step 2 fails and the plan stops. The key stays in place and still checks new orders; only the old rows go unchecked.\n\nOnce it's in place, the app gets an error if it inserts an order for a customer that doesn't exist. There's still no index on `orders.customer_id`, and the task didn't ask for one."
+}

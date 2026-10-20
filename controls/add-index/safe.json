@@ -1,0 +1,10 @@
+{
+ "task": "add-index",
+ "by": "control (safe)",
+ "steps": [
+  {
+   "note": "CREATE INDEX CONCURRENTLY",
+   "sql": "CREATE INDEX CONCURRENTLY orders_customer_id_idx ON orders (customer_id);"
+  }
+ ]
+}

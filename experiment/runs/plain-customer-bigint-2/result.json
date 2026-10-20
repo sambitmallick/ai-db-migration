@@ -1,0 +1,54 @@
+{
+ "run": "plain-customer-bigint-2",
+ "task": "customer-bigint",
+ "mode": "plain",
+ "prompt": "/migrate customer-bigint plans/plain-customer-bigint-2.json",
+ "seconds": 104,
+ "plan_written": true,
+ "plan_valid": true,
+ "steps": 8,
+ "tool_calls": [
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\tasks\\\\customer-bigint\\\\task.md\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\db\\\\seed.sql\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\app\\\\server.js\"}"
+  },
+  {
+   "tool": "Read",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\k8s\\\\shop.yaml\"}"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && cat scripts/db-ro.sh; bash scripts/db-ro.sh \\\"\\\\d orders\\\" ; bash scripts/db-ro.sh \\\"select n.nspname, c.relname, c.relkind from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname not in ('p"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && ls harness scripts plans tasks; ls tasks/customer-bigint\"}"
+  },
+  {
+   "tool": "Write",
+   "input": "{\"file_path\": \"D:\\\\DevOpsAutopilot\\\\video-29-db-migration\\\\ai-db-migration\\\\workspace\\\\plans\\\\plain-customer-bigint-2.json\", \"content\": \"{\\\"task\\\": \\\"customer-bigint\\\", \\\"steps\\\": [\\n  {\\\"note\\\": \\\"Trigger function that copies customer_id into the new bigint column on every insert/update. Touches no"
+  },
+  {
+   "tool": "Bash",
+   "input": "{\"command\": \"cd \\\"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\\\" && node -e \\\"JSON.parse(require('fs').readFileSync('plans/plain-customer-bigint-2.json','utf8')); console.log('ok')\\\"\"}"
+  }
+ ],
+ "permission_denials": [
+  {
+   "tool_name": "Bash",
+   "tool_use_id": "toolu_01JsuB7WojHv1Ga5YN1d2E7F",
+   "tool_input": {
+    "command": "cd \"D:/DevOpsAutopilot/video-29-db-migration/ai-db-migration/workspace\" && node -e \"JSON.parse(require('fs').readFileSync('plans/plain-customer-bigint-2.json','utf8')); console.log('ok')\""
+   }
+  }
+ ],
+ "answer": "I wrote the plan to `plans/plain-customer-bigint-2.json`. It hasn't been run, and I couldn't check that the file parses as JSON because running commands was blocked, so give it a quick look before it runs. The app keeps reading and writing `customer_id` the whole time, so no deploy step is needed.\n\nChanging the column type directly would rewrite all 10M orders while locking the table, and with the app's 2 s query timeout that would mean errors. So the plan builds a new column alongside and swaps it in at the end:\n\n1. **New column and trigger:** add a nullable `customer_id_new bigint`, plus a trigger that copies `customer_id` into it on every insert or update. Adding a column like this doesn't rewrite the table.\n2. **Backfill:** copy the old value into the new column for existing rows, 20,000 ids per batch, committing after each batch. The app never updates orders, so this doesn't get in its way. Then a `VACUUM ANALYZE` clears out the old row versions the backfill leaves behind.\n3. **Checks:** prove there are no nulls in the new column without a long lock (`CHECK ... NOT VALID`, then `VALIDATE`). Then stop the plan if any row's new value differs from its old one.\n4. **Swap:** in one short transaction, `SET NOT NULL` (no table scan needed because the check already proves it), drop the check and trigger, drop the old integer column, and rename `customer_id_new` to `customer_id`.\n5. **Final check:** fail if `customer_id` isn't `bigint NOT NULL`.\n\nEach step that needs a table lock tries with a short timeout (200\u2013500 ms) and retries, up to 300 times. That way app queries never wait long behind the migration. If the lock still can't be taken after 300 tries, the step fails and the plan stops there.\n\nOne side effect: `customer_id` becomes the last column in the table. The app names its columns explicitly, so this doesn't affect it."
+}
