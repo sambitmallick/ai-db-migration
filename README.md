@@ -95,4 +95,4 @@ python experiment/scoreboard.py
 ```
 
 ---
-🎬 Full walkthrough: **the video** · channel: **[DevOps Autopilot](https://www.youtube.com/@DevOpsAutopilot)**
+🎬 Full walkthrough: **[the video](https://youtu.be/fv18ye0iErc)** · channel: **[DevOps Autopilot](https://www.youtube.com/@DevOpsAutopilot)**
